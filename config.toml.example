@@ -1,0 +1,16 @@
+
+
+reload_interval = "10s"
+
+
+[[clients]]
+url = "http://localhost:8546"
+name = "Local-A"
+
+[[clients]]
+url = "http://localhost:8547"
+name = "Local-B"
+
+[[clients]]
+url = "http://localhost:8548"
+name = "Local-C"
