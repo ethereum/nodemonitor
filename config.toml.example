@@ -1,7 +1,9 @@
 
 
+# How often to reload data from the nodes
 reload_interval = "10s"
-
+# If specified, a http server will serve static content here
+server_address = "0.0.0.0:8080"
 
 [[clients]]
 url = "http://localhost:8546"

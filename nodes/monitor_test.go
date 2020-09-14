@@ -30,7 +30,6 @@ func (t *testNode) Status() int {
 
 func (t *testNode) SetStatus(int) {}
 
-
 func (t *testNode) Version() (string, error) {
 	return "TestNode/v0.1/darwin/go1.4.1", nil
 }
@@ -47,7 +46,7 @@ func (t *testNode) BlockAt(num uint64, force bool) *blockInfo {
 	if num > uint64(t.head) {
 		return nil
 	}
-	log.Info("BlockAt", "node", t.id, "query",num)
+	log.Info("BlockAt", "node", t.id, "query", num)
 	return t.chain[num]
 }
 
@@ -107,8 +106,8 @@ func TestMonitor(t *testing.T) {
 	nodeC := newTestNode("node-c", 2202, c)
 	// D is same as A, but two blocks behind
 	nodeD := newTestNode("node-d", 2702, a)
-	nodes := []Node{nodeA, nodeB, nodeC,nodeD}
-	
+	nodes := []Node{nodeA, nodeB, nodeC, nodeD}
+
 	mon, _ := NewMonitor(nodes, nil)
 	mon.doChecks()
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net/http"
 	"os"
 	"os/signal"
 
@@ -17,7 +18,12 @@ func main() {
 	// Initialize the logger
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 
-	f, err := os.Open("config.toml")
+	if len(os.Args) < 2 {
+		log.Error("Second arg must be path to config file")
+		os.Exit(1)
+	}
+	cFile := os.Args[1]
+	f, err := os.Open(cFile)
 	if err != nil {
 		log.Error("Error", "error", err)
 		os.Exit(1)
@@ -37,6 +43,9 @@ func main() {
 		}
 		log.Info("Client configured", "name", c.Name, "url", c.URL().String())
 	}
+
+	spinupServer(config)
+
 	mon, err := spinupMonitor(config)
 	if err != nil {
 		log.Error("Error", "error", err)
@@ -66,4 +75,15 @@ func spinupMonitor(config nodes.Config) (*nodes.NodeMonitor, error) {
 		clients = append(clients, nodes.NewRPCNode(rpcCli, db))
 	}
 	return nodes.NewMonitor(clients, db)
+}
+
+func spinupServer(config nodes.Config) error {
+	if len(config.ServerAddress) == 0 {
+		return nil
+	}
+	fs := http.FileServer(http.Dir("www/"))
+	http.Handle("/", http.StripPrefix("/", fs))
+	log.Info("Starting web server", "address", config.ServerAddress)
+	go http.ListenAndServe(config.ServerAddress, nil)
+	return nil
 }

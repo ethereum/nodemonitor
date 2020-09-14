@@ -7,17 +7,17 @@ import (
 
 type Config struct {
 	ReloadInterval tomlDuration
+	ServerAddress  string
 	Clients        []ClientInfo
 }
-
 
 type ClientInfo struct {
 	Url  *tomlUrl
 	Name string
 }
 
-func (c *ClientInfo) URL() *url.URL{
-	if c.Url == nil{
+func (c *ClientInfo) URL() *url.URL {
+	if c.Url == nil {
 		return nil
 	}
 	u := url.URL(*c.Url)
@@ -43,11 +43,10 @@ func (d tomlDuration) MarshalText() ([]byte, error) {
 type tomlUrl url.URL
 
 func (t *tomlUrl) UnmarshalText(data []byte) error {
-	 u, err := url.Parse(string(data))
-	 if err == nil {
-
-		 *t = tomlUrl(*u)
-	 }
+	u, err := url.Parse(string(data))
+	if err == nil {
+		*t = tomlUrl(*u)
+	}
 	return err
 }
 
