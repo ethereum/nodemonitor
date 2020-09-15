@@ -302,6 +302,10 @@ func (mon *NodeMonitor) loop() {
 
 func (mon *NodeMonitor) doChecks() {
 
+	// splitSize is the max amount of blocks in any chain not accepted by all nodes.
+	// If one node is simply 'behind' that does not count, since it has yet
+	// to accept the canon chain
+	var splitSize int64
 	// We want to cross-check all 'latest' numbers. So if we have
 	// node 1: x,
 	// node 2: y,
@@ -336,19 +340,26 @@ func (mon *NodeMonitor) doChecks() {
 			if b.HeadNum() < highest {
 				highest = b.HeadNum()
 			}
-			if a.BlockAt(highest, false) != b.BlockAt(highest, false) {
-				split := findSplit(int(highest), a, b)
-				log.Info("Split found", "x", a.Name(), "y", b.Name(), "num", split)
-				// Point of interest, add split-block and split-block-minus-one to heads
-				heads[uint64(split)] = true
-				if split > 0 {
-					heads[uint64(split-1)] = true
-				}
-			} else {
-				log.Info("Same chain", "x", a.Name(), "y", b.Name(), "highest common", highest)
+			// At the number where both nodes have blocks, check if the two
+			// blocks are identical
+			if a.BlockAt(highest, false) == b.BlockAt(highest, false) {
+				return
+			}
+			// They appear to have diverged
+			split := findSplit(int(highest), a, b)
+			splitLength := int64(int(highest) - split)
+			if splitSize < splitLength {
+				splitSize = splitLength
+			}
+			log.Info("Split found", "x", a.Name(), "y", b.Name(), "num", split)
+			// Point of interest, add split-block and split-block-minus-one to heads
+			heads[uint64(split)] = true
+			if split > 0 {
+				heads[uint64(split-1)] = true
 			}
 		},
 	)
+	metrics.GetOrRegisterGauge("chain/split", registry).Update(int64(splitSize))
 	var headList []int
 	for k, _ := range heads {
 		headList = append(headList, int(k))

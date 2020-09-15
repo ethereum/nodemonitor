@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -82,7 +83,7 @@ func (t *testNode) BlockAt(num uint64, force bool) *blockInfo {
 	if num > uint64(t.head) {
 		return nil
 	}
-	log.Info("BlockAt", "node", t.id, "query", num)
+	log.Trace("BlockAt", "node", t.id, "query", num)
 	return t.chain[num]
 }
 
@@ -148,6 +149,6 @@ func TestMonitor(t *testing.T) {
 	nodes = append(nodes, &brokenNode{"broken-b"})
 	nodes = append(nodes, &brokenNode{"broken-c"})
 
-	mon, _ := NewMonitor(nodes, nil)
+	mon, _ := NewMonitor(nodes, nil, time.Second)
 	mon.doChecks()
 }
