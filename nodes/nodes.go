@@ -342,7 +342,18 @@ func (mon *NodeMonitor) doChecks() {
 			}
 			// At the number where both nodes have blocks, check if the two
 			// blocks are identical
-			if a.BlockAt(highest, false) == b.BlockAt(highest, false) {
+			ha := a.BlockAt(highest, false)
+			if ha == nil {
+				// Yeah this actually _does_ happen, see https://github.com/NethermindEth/nethermind/issues/2306
+				log.Error("Node seems to be missing blocks", "name", a.Name(), "number", highest)
+				return
+			}
+			hb := b.BlockAt(highest, false)
+			if hb == nil {
+				log.Error("Node seems to be missing blocks", "name", b.Name(), "number", highest)
+				return
+			}
+			if ha.hash == hb.hash {
 				return
 			}
 			// They appear to have diverged
