@@ -129,13 +129,18 @@ function onData(data){
     thead.empty()
     // Add td headings
     thead.append(utils.tag("th", "Number"))
-    data.Cols.forEach(function(client){
+    data.Cols.forEach(function(client) {
         let txt = client.Name
-        if (client.Status != 0){
+        if (client.Status != 0) {
             txt += "(unhealthy)"
         }
-        thead.append(utils.tag("th", txt))})
-
+        let heading = utils.tag("th", txt)
+        if (client.Version.length > 0) {
+            heading.append(utils.tag("br"))
+            heading.append(utils.tag("code", client.Version))
+        }
+        thead.append(heading)
+    })
     // Clear rows
     var tbody = $("#table tbody")
     tbody.empty()

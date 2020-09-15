@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -56,6 +57,8 @@ func main() {
 	quitCh := make(chan os.Signal, 1)
 	signal.Notify(quitCh, os.Interrupt)
 
+	// TODO: Monitor changes to the config file
+
 	<-quitCh
 	mon.Stop()
 	os.Exit(0)
@@ -72,9 +75,9 @@ func spinupMonitor(config nodes.Config) (*nodes.NodeMonitor, error) {
 		if err != nil {
 			return nil, err
 		}
-		clients = append(clients, nodes.NewRPCNode(rpcCli, db))
+		clients = append(clients, nodes.NewRPCNode(cli.Name,rpcCli, db))
 	}
-	return nodes.NewMonitor(clients, db)
+	return nodes.NewMonitor(clients, db, time.Duration(config.ReloadInterval))
 }
 
 func spinupServer(config nodes.Config) error {

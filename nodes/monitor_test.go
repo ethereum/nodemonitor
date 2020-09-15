@@ -1,6 +1,7 @@
 package nodes
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -14,6 +15,40 @@ type testNode struct {
 	id    string
 	chain []*blockInfo
 	head  int // points to where we're currently at, in the chain
+}
+
+type brokenNode struct {
+	id string
+}
+
+func (b *brokenNode) Version() (string, error) {
+	return "", errors.New("broken node")
+}
+
+func (b *brokenNode) Name() string {
+	return b.id
+}
+
+func (b *brokenNode) Status() int {
+	return NodeStatusUnreachable
+}
+
+func (b brokenNode) SetStatus(int) {}
+
+func (b brokenNode) UpdateLatest() error {
+	return errors.New("broken node")
+}
+
+func (b brokenNode) BlockAt(num uint64, force bool) *blockInfo {
+	return nil
+}
+
+func (b brokenNode) HashAt(num uint64, force bool) common.Hash {
+	return common.Hash{}
+}
+
+func (b brokenNode) HeadNum() uint64 {
+	return 0
 }
 
 func newTestNode(id string, head int, chain []*blockInfo) *testNode {
@@ -31,6 +66,7 @@ func (t *testNode) Status() int {
 func (t *testNode) SetStatus(int) {}
 
 func (t *testNode) Version() (string, error) {
+
 	return "TestNode/v0.1/darwin/go1.4.1", nil
 }
 
@@ -101,12 +137,16 @@ func TestMonitor(t *testing.T) {
 	}
 
 	// spin up three nodes
-	nodeA := newTestNode("node-a", 2704, a)
-	nodeB := newTestNode("node-b", 2800, b)
-	nodeC := newTestNode("node-c", 2202, c)
+	var nodes []Node
+	nodes = append(nodes, newTestNode("node-a", 2704, a))
+	nodes = append(nodes, newTestNode("node-b", 2800, b))
+	nodes = append(nodes, newTestNode("node-c", 2202, c))
 	// D is same as A, but two blocks behind
-	nodeD := newTestNode("node-d", 2702, a)
-	nodes := []Node{nodeA, nodeB, nodeC, nodeD}
+	nodes = append(nodes, newTestNode("node-d", 2702, a))
+
+	nodes = append(nodes, &brokenNode{"broken-a"})
+	nodes = append(nodes, &brokenNode{"broken-b"})
+	nodes = append(nodes, &brokenNode{"broken-c"})
 
 	mon, _ := NewMonitor(nodes, nil)
 	mon.doChecks()

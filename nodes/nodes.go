@@ -63,11 +63,12 @@ type RPCNode struct {
 	status int
 }
 
-func NewRPCNode(rpcCli *rpc.Client, db *blockDB) *RPCNode {
+func NewRPCNode(name string, rpcCli *rpc.Client, db *blockDB) *RPCNode {
 	ethCli := ethclient.NewClient(rpcCli)
 	return &RPCNode{
 		rpcCli:       rpcCli,
 		ethCli:       ethCli,
+		name:         name,
 		version:      "n/a",
 		chainHistory: make(map[uint64]*blockInfo),
 		db:           db,
@@ -91,7 +92,6 @@ func (node *RPCNode) Version() (string, error) {
 		if len(parts) > 0 {
 			node.version = strings.Join(parts[1:], "/")
 		}
-		node.name = parts[0]
 	}
 	return ver, err
 }
@@ -104,9 +104,6 @@ func (node *RPCNode) HeadNum() uint64 {
 }
 
 func (node *RPCNode) Name() string {
-	if len(node.name) == 0 {
-		node.Version()
-	}
 	return node.name
 }
 
@@ -123,7 +120,7 @@ func (node *RPCNode) fetchHeader(num *big.Int) (*blockInfo, error) {
 	log.Debug("Doing check", "node", node.name, "requested", num)
 	h, err := node.ethCli.HeaderByNumber(context.Background(), num)
 	if err != nil {
-		log.Error("Blockcheck error", "error", err)
+		//log.Error("Blockcheck error", "error", err)
 		return nil, err
 	}
 	if h == nil {
@@ -242,31 +239,34 @@ func (r *Report) AddToReport(node Node) {
 
 // NodeMonitor monitors a set of nodes, and performs checks on them
 type NodeMonitor struct {
-	nodes   []Node
-	quitCh  chan struct{}
-	backend *blockDB
-	wg      sync.WaitGroup
+	nodes          []Node
+	quitCh         chan struct{}
+	backend        *blockDB
+	wg             sync.WaitGroup
+	reloadInterval time.Duration
 }
 
 // NewMonitor creates a new NodeMonitor
-func NewMonitor(nodes []Node, db *blockDB) (*NodeMonitor, error) {
+func NewMonitor(nodes []Node, db *blockDB, reload time.Duration) (*NodeMonitor, error) {
 	// Do initial healthcheck
 	for _, node := range nodes {
 		v, err := node.Version()
 		if err != nil {
 			node.SetStatus(NodeStatusUnreachable)
 			log.Error("Error checking version", "error", err)
-			return nil, err
 		} else {
 			node.SetStatus(NodeStatusOK)
 		}
 		log.Info("RPCNode OK", "version", v)
 	}
-
+	if reload == 0 {
+		reload = 10 * time.Second
+	}
 	nm := &NodeMonitor{
-		nodes:   nodes,
-		quitCh:  make(chan struct{}),
-		backend: db,
+		nodes:          nodes,
+		quitCh:         make(chan struct{}),
+		backend:        db,
+		reloadInterval: reload,
 	}
 	nm.doChecks()
 	return nm, nil
@@ -288,7 +288,7 @@ func (mon *NodeMonitor) loop() {
 		select {
 		case <-mon.quitCh:
 			return
-		case <-time.After(5 * time.Second):
+		case <-time.After(mon.reloadInterval):
 			mon.doChecks()
 		}
 	}
@@ -307,19 +307,24 @@ func (mon *NodeMonitor) doChecks() {
 	// To figure out if they are on the same chain, or have diverged
 
 	var heads = make(map[uint64]bool)
+	var activeNodes []Node
 	for _, node := range mon.nodes {
 		err := node.UpdateLatest()
 		v, _ := node.Version()
 		if err != nil {
 			log.Error("Error getting latest", "node", v, "error", err)
+			node.SetStatus(NodeStatusUnreachable)
 		} else {
+			activeNodes = append(activeNodes, node)
+			node.SetStatus(NodeStatusOK)
 			num := node.HeadNum()
 			log.Info("Latest", "num", num, "node", v)
 			heads[num] = true
 		}
 	}
+
 	// Pair-wise, figure out the splitblocks (if any)
-	forPairs(mon.nodes,
+	forPairs(activeNodes,
 		func(a, b Node) {
 			highest := a.HeadNum()
 			if b.HeadNum() < highest {
@@ -348,7 +353,6 @@ func (mon *NodeMonitor) doChecks() {
 	for _, node := range mon.nodes {
 		r.AddToReport(node)
 	}
-	r.Print()
 
 	jsd, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {
@@ -357,7 +361,9 @@ func (mon *NodeMonitor) doChecks() {
 	}
 	if mon.backend == nil {
 		// if there's no backend, this is probably a test.
-		// Just return
+		// Just print and return
+		r.Print()
+		fmt.Println(string(jsd))
 		return
 	}
 	if err := ioutil.WriteFile("www/data.json", jsd, 0777); err != nil {

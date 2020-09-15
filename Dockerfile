@@ -14,5 +14,9 @@ RUN cd /nodemonitor && go build .
 FROM alpine:latest
 COPY --from=builder /nodemonitor/nodemonitor /usr/local/bin/
 
+ADD www/index.html /www/index.html
+ADD www/script.js /www/script.js
+RUN mkdir -p /www/hashes
+
 EXPOSE 8080
 ENTRYPOINT ["nodemonitor"]
