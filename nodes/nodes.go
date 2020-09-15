@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -61,10 +62,13 @@ type RPCNode struct {
 	// backend to store hash -> header into
 	db     *blockDB
 	status int
+
+	headGauge metrics.Gauge
 }
 
 func NewRPCNode(name string, rpcCli *rpc.Client, db *blockDB) *RPCNode {
 	ethCli := ethclient.NewClient(rpcCli)
+	gaugeName := fmt.Sprintf("head/%v", name)
 	return &RPCNode{
 		rpcCli:       rpcCli,
 		ethCli:       ethCli,
@@ -72,6 +76,7 @@ func NewRPCNode(name string, rpcCli *rpc.Client, db *blockDB) *RPCNode {
 		version:      "n/a",
 		chainHistory: make(map[uint64]*blockInfo),
 		db:           db,
+		headGauge:    metrics.GetOrRegisterGauge(gaugeName, registry),
 	}
 }
 
@@ -113,6 +118,7 @@ func (node *RPCNode) UpdateLatest() error {
 		return err
 	}
 	node.latest = bl
+	node.headGauge.Update(int64(bl.num))
 	return nil
 }
 

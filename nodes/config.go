@@ -9,6 +9,16 @@ type Config struct {
 	ReloadInterval tomlDuration
 	ServerAddress  string
 	Clients        []ClientInfo
+	Metrics metricsConfig
+}
+
+type metricsConfig struct{
+	Enabled bool
+	Endpoint string
+	Username string
+	Database string
+	Password string
+	Namespace string
 }
 
 type ClientInfo struct {

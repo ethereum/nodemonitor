@@ -19,6 +19,7 @@ func main() {
 	// Initialize the logger
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 
+
 	if len(os.Args) < 2 {
 		log.Error("Second arg must be path to config file")
 		os.Exit(1)
@@ -44,6 +45,8 @@ func main() {
 		}
 		log.Info("Client configured", "name", c.Name, "url", c.URL().String())
 	}
+
+	nodes.EnableMetrics(&config)
 
 	spinupServer(config)
 

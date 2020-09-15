@@ -7,12 +7,21 @@ server_address = "0.0.0.0:8080"
 
 [[clients]]
 url = "http://localhost:8546"
-name = "Local-A"
+name = "geth"
 
 [[clients]]
 url = "http://localhost:8547"
-name = "Local-B"
+name = "besu"
 
 [[clients]]
 url = "http://localhost:8548"
-name = "Local-C"
+name = "openethereum"
+
+[Metrics]
+
+enabled = true
+endpoint = "https://influx-database.yourdomain.io/"
+username = "metrics"
+database  = "metrics"
+password  = "secret-password-goes-here"
+namespace = "monitoring."
