@@ -14,3 +14,4 @@ It shows a neat little dashboard, where 'interesting' points of differing opinio
 It also has support for pushing metrics to `influxdb`, so you can get nice charts and 
 alerts from all/any node which supports basic set of standard rpc methods. 
 
+![](charts.png)
