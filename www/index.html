@@ -10,73 +10,19 @@
         <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js" integrity="sha512-bLT0Qm9VnAYZDflyKcBaQ2gg0hSYNQrJ8RilYldYQ1FxQYoCLtUjuuRuZo+fjqhx/qtq/1itJ0C2ejDxltZVFg==" crossorigin="anonymous"></script>
         <script type="text/javascript" src="script.js"></script>
-    <style type="text/css">
-        /* Some responsiveness */
-
-        @media (max-width: 1200px) {
-            .optional{
-                display: none
-            }
-        }
-        /* Responsive */
-
-        @media (max-width: 767px) {
-            .fl-table {
-                display: block;
-                width: 100%;
-            }
-            .table-wrapper:before{
-                content: "Scroll horizontally >";
-                display: block;
-                text-align: right;
-                font-size: 11px;
-                color: white;
-                padding: 0 0 10px;
-            }
-            .fl-table thead, .fl-table tbody, .fl-table thead th {
-                display: block;
-            }
-            .fl-table thead th:last-child{
-                border-bottom: none;
-            }
-            .fl-table thead {
-                float: left;
-            }
-            .fl-table tbody {
-                width: auto;
-                position: relative;
-                overflow-x: auto;
-            }
-            .fl-table td, .fl-table th {
-                padding: 20px .625em .625em .625em;
-                height: 60px;
-                vertical-align: middle;
-                box-sizing: border-box;
-                overflow-x: hidden;
-                overflow-y: auto;
-                width: 120px;
-                font-size: 13px;
-                text-overflow: ellipsis;
-            }
-            .fl-table thead th {
-                text-align: left;
-                border-bottom: 1px solid #f7f7f9;
-            }
-            .fl-table tbody tr {
-                display: table-cell;
-            }
-            .fl-table tbody td {
-                display: block;
-                text-align: center;
-            }
-        }
-    </style>
-
     </head>
     <body>
     <div class="container" role="main">
-        <h3>Node status</h3>
-
+        <h3>Nodes</h3>
+        <table id="nodes" class="table table-striped">
+            <thead><tr>
+                <th>Name</th>
+                <th>Version</th>
+                <th>Status</th>
+            </tr></thead>
+            <tbody></tbody>
+        </table>
+        <h3>Chains</h3>
         <div class="table-wrapper">
             <table id="table" class="fl-table table">
                 <thead></thead>
@@ -96,4 +42,34 @@
 
 <hr/>
 <pre id="debug"></pre>
-<button onClick="javascript:fetch()">Reload</button>
+Refreshing content in <span id="time">?</span> seconds
+<button id="pause" onClick="javascript:pause()">Pause</button>
+<!--
+<button onClick="javascript:fetch()">Refresh now</button>
+-->
+</div>
+
+<script type="text/javascript">
+    function startTimer(display) {
+        var display=$("#time")
+        var timer = 10;
+        display.text(timer)
+        var id =  window.setInterval(function () {
+            --timer
+            if (timer == 0){
+                fetch()
+                timer = 10
+            }
+            display.text(timer)
+        }, 1000);
+
+    let pause = function(){
+        display.text("∞")
+        window.clearInterval(id)
+        $("#pause").attr("disabled", true)
+        $("#pause").text("Paused")
+    }
+    return pause
+}
+var pause=startTimer()
+</script>

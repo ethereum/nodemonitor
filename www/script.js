@@ -127,22 +127,29 @@ function progress(message){
 
 // onData handles the main data chunks
 function onData(data){
+    // Populate node info
+    var nodeB = $("#nodes tbody")
+    nodeB.empty()
+
     // Clear headings
     var thead = $("#table thead")
     thead.empty()
-    // Add td headings
     thead.append(utils.tag("th", "Number"))
+
     data.Cols.forEach(function(client) {
-        let txt = client.Name
+        let name = client.Name
+        let version = client.Version
+        let status = "OK"
         if (client.Status != 0) {
-            txt += " (unhealthy)"
+            status = " (unhealthy)"
         }
-        let heading = utils.tag("th", txt)
-        if (client.Version.length > 0) {
-            heading.append(utils.tag("br"))
-            heading.append(utils.tag("code", client.Version, "optional"))
-        }
-        thead.append(heading)
+        let tRow = utils.tag("tr")
+        tRow.append(utils.tag("td", name))
+        tRow.append(utils.tag("td", version))
+        tRow.append(utils.tag("td", status))
+        nodeB.append(tRow)
+        // Add td headings
+        thead.append(utils.tag("th", name))
     })
     // Clear rows
     var tbody = $("#table tbody")
