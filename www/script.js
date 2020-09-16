@@ -14,7 +14,7 @@ let utils = {
         if (hashstr.length !== 66){
             return hashstr
         }
-        hashstr =  hashstr.slice(0,8)+"…"+hashstr.slice(-6);
+        hashstr =  hashstr.slice(0,8)+"…"//+hashstr.slice(-6);
         return hashstr
     },
     etherscanLink : function(hash){
@@ -132,7 +132,7 @@ function onData(data){
     data.Cols.forEach(function(client) {
         let txt = client.Name
         if (client.Status != 0) {
-            txt += "(unhealthy)"
+            txt += " (unhealthy)"
         }
         let heading = utils.tag("th", txt)
         if (client.Version.length > 0) {
