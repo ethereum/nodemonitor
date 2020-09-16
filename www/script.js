@@ -1,10 +1,13 @@
 'use strict';
 // general utility library
 let utils = {
-    tag: function(typ, str){
+    tag: function(typ, str, clazz){
         var d = document.createElement(typ)
         if(str){
             d.innerText=""+str
+        }
+        if (clazz){
+            d.classList.add(clazz)
         }
         return d
     },
@@ -137,7 +140,7 @@ function onData(data){
         let heading = utils.tag("th", txt)
         if (client.Version.length > 0) {
             heading.append(utils.tag("br"))
-            heading.append(utils.tag("code", client.Version))
+            heading.append(utils.tag("code", client.Version, "optional"))
         }
         thead.append(heading)
     })

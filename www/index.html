@@ -8,25 +8,89 @@
 
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css" integrity="sha512-NhSC1YmyruXifcj/KFRWoC561YpHpc5Jtzgvbuzx5VozKpWvQ+4nXhPdFgmx8xqexRcpAglTj9sIBWINXa8x5w==" crossorigin="anonymous" />
         <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
-
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js" integrity="sha512-bLT0Qm9VnAYZDflyKcBaQ2gg0hSYNQrJ8RilYldYQ1FxQYoCLtUjuuRuZo+fjqhx/qtq/1itJ0C2ejDxltZVFg==" crossorigin="anonymous"></script>
         <script type="text/javascript" src="script.js"></script>
+    <style type="text/css">
+        /* Some responsiveness */
+
+        @media (max-width: 1200px) {
+            .optional{
+                display: none
+            }
+        }
+        /* Responsive */
+
+        @media (max-width: 767px) {
+            .fl-table {
+                display: block;
+                width: 100%;
+            }
+            .table-wrapper:before{
+                content: "Scroll horizontally >";
+                display: block;
+                text-align: right;
+                font-size: 11px;
+                color: white;
+                padding: 0 0 10px;
+            }
+            .fl-table thead, .fl-table tbody, .fl-table thead th {
+                display: block;
+            }
+            .fl-table thead th:last-child{
+                border-bottom: none;
+            }
+            .fl-table thead {
+                float: left;
+            }
+            .fl-table tbody {
+                width: auto;
+                position: relative;
+                overflow-x: auto;
+            }
+            .fl-table td, .fl-table th {
+                padding: 20px .625em .625em .625em;
+                height: 60px;
+                vertical-align: middle;
+                box-sizing: border-box;
+                overflow-x: hidden;
+                overflow-y: auto;
+                width: 120px;
+                font-size: 13px;
+                text-overflow: ellipsis;
+            }
+            .fl-table thead th {
+                text-align: left;
+                border-bottom: 1px solid #f7f7f9;
+            }
+            .fl-table tbody tr {
+                display: table-cell;
+            }
+            .fl-table tbody td {
+                display: block;
+                text-align: center;
+            }
+        }
+    </style>
+
     </head>
-<body>
+    <body>
+    <div class="container" role="main">
+        <h3>Node status</h3>
 
-<div class="container" role="main">
-    <h3>Node status</h3>
-    <table id="table" class="table table-striped">
-        <thead></thead>
-        <tbody></tbody>
-    </table></body>
-    <h3>Block info</h3>
-    <table id="block" class="table table-condensed">
-        <thead></thead>
-        <tbody></tbody>
-    </table>
+        <div class="table-wrapper">
+            <table id="table" class="fl-table table">
+                <thead></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <h3>Block info</h3>
+        <table id="block" class="table table-condensed">
+            <thead></thead>
+            <tbody></tbody>
+        </table>
 
-</div>
+    </div>
+    </body>
 </html>
 
 
