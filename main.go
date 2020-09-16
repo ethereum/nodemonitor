@@ -1,13 +1,13 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/holiman/nodemonitor/nodes"
 	"github.com/naoina/toml"
 )
@@ -18,7 +18,6 @@ import (
 func main() {
 	// Initialize the logger
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
-
 
 	if len(os.Args) < 2 {
 		log.Error("Second arg must be path to config file")
@@ -37,24 +36,16 @@ func main() {
 		log.Error("Error", "error", err)
 		os.Exit(1)
 	}
-	// then to use the unmarshaled config...
-	for _, c := range config.Clients {
-		if c.URL() == nil {
-			log.Error("Error: client missing url", "name", c.Name)
-			os.Exit(1)
-		}
-		log.Info("Client configured", "name", c.Name, "url", c.URL().String())
-	}
-
 	nodes.EnableMetrics(&config)
-
-	spinupServer(config)
 
 	mon, err := spinupMonitor(config)
 	if err != nil {
 		log.Error("Error", "error", err)
 		os.Exit(1)
 	}
+
+	spinupServer(config)
+
 	mon.Start()
 	// Wait for ctrl-c
 	quitCh := make(chan os.Signal, 1)
@@ -72,15 +63,37 @@ func spinupMonitor(config nodes.Config) (*nodes.NodeMonitor, error) {
 	if err != nil {
 		return nil, err
 	}
+	reload, err := time.ParseDuration(config.ReloadInterval)
+	if err != nil {
+		return nil, err
+	}
 	var clients []nodes.Node
-	for _, cli := range config.Clients {
-		rpcCli, err := rpc.Dial(cli.URL().String())
+	for _, c := range config.Clients {
+		var (
+			node nodes.Node
+			err  error
+		)
+		switch c.Kind {
+		case "infura":
+			node, err = nodes.NewInfuraNode(c.Name, config.InfuraKey, config.InfuraEndpoint,
+				db, c.Ratelimit)
+		case "alchemy":
+			node, err = nodes.NewAlchemyNode(c.Name, config.AlchemyKey, config.AlchemyEndpoint,
+				db, c.Ratelimit)
+		case "rpc":
+			node, err = nodes.NewRPCNode(c.Name, c.Url, db, c.Ratelimit)
+		default:
+			log.Error("Wrong client type", "kind", c.Kind, "available", "[rpc, infura, alchemy]")
+			return nil, errors.New("invalid config")
+		}
 		if err != nil {
 			return nil, err
 		}
-		clients = append(clients, nodes.NewRPCNode(cli.Name,rpcCli, db))
+		clients = append(clients, node)
+		log.Info("Client configured", "name", c.Name)
 	}
-	return nodes.NewMonitor(clients, db, time.Duration(config.ReloadInterval))
+
+	return nodes.NewMonitor(clients, db, reload)
 }
 
 func spinupServer(config nodes.Config) error {

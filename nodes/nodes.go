@@ -2,7 +2,9 @@ package nodes
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"go.uber.org/ratelimit"
 	"math/big"
 	"strings"
 
@@ -53,9 +55,19 @@ type RPCNode struct {
 	status int
 
 	headGauge metrics.Gauge
+	// rate limiting
+	throttle ratelimit.Limiter
 }
 
-func NewRPCNode(name string, rpcCli *rpc.Client, db *blockDB) *RPCNode {
+func NewRPCNode(name string, url string, db *blockDB, rateLimit int) (*RPCNode, error) {
+	rpcCli, err := rpc.Dial(url)
+	if err != nil {
+		return nil, err
+	}
+	throttle := ratelimit.NewUnlimited()
+	if rateLimit > 0 {
+		throttle = ratelimit.New(rateLimit)
+	}
 	ethCli := ethclient.NewClient(rpcCli)
 	gaugeName := fmt.Sprintf("head/%v", name)
 	return &RPCNode{
@@ -66,7 +78,62 @@ func NewRPCNode(name string, rpcCli *rpc.Client, db *blockDB) *RPCNode {
 		chainHistory: make(map[uint64]*blockInfo),
 		db:           db,
 		headGauge:    metrics.GetOrRegisterGauge(gaugeName, registry),
+		throttle:     throttle,
+	}, nil
+}
+
+func NewInfuraNode(name, projectId, endpoint string, db *blockDB, rateLimit int) (*RPCNode, error) {
+	if len(projectId) == 0 {
+		return nil, errors.New("Missing infura_key")
 	}
+	url := fmt.Sprintf("%v%v", endpoint, projectId)
+	rpcCli, err := rpc.Dial(url)
+	if err != nil {
+		return nil, err
+	}
+	ethCli := ethclient.NewClient(rpcCli)
+	gaugeName := fmt.Sprintf("head/%v", name)
+	throttle := ratelimit.NewUnlimited()
+	if rateLimit > 0 {
+		throttle = ratelimit.New(rateLimit)
+	}
+	return &RPCNode{
+		rpcCli:       rpcCli,
+		ethCli:       ethCli,
+		name:         name,
+		version:      "Infura V3",
+		chainHistory: make(map[uint64]*blockInfo),
+		db:           db,
+		headGauge:    metrics.GetOrRegisterGauge(gaugeName, registry),
+		throttle:     throttle,
+	}, nil
+}
+
+func NewAlchemyNode(name, apiKey, endpoint string, db *blockDB, rateLimit int) (*RPCNode, error) {
+	if len(apiKey) == 0 {
+		return nil, errors.New("Missing alchemy_key")
+	}
+	url := fmt.Sprintf("%v%v", endpoint, apiKey)
+	rpcCli, err := rpc.Dial(url)
+	if err != nil {
+		return nil, err
+	}
+	ethCli := ethclient.NewClient(rpcCli)
+	gaugeName := fmt.Sprintf("head/%v", name)
+	throttle := ratelimit.NewUnlimited()
+	if rateLimit > 0 {
+		throttle = ratelimit.New(rateLimit)
+	}
+	return &RPCNode{
+		rpcCli:       rpcCli,
+		ethCli:       ethCli,
+		name:         name,
+		version:      "Alchemy V2",
+		chainHistory: make(map[uint64]*blockInfo),
+		db:           db,
+		headGauge:    metrics.GetOrRegisterGauge(gaugeName, registry),
+		throttle:     throttle,
+	}, nil
 }
 
 func (node *RPCNode) SetStatus(status int) {
@@ -78,9 +145,9 @@ func (node *RPCNode) Status() int {
 }
 
 func (node *RPCNode) Version() (string, error) {
+	node.throttle.Take()
 	var ver string
-	ctx := context.Background()
-	err := node.rpcCli.CallContext(ctx, &ver, "web3_clientVersion")
+	err := node.rpcCli.CallContext(context.Background(), &ver, "web3_clientVersion")
 	if err == nil {
 		parts := strings.Split(ver, "/")
 		if len(parts) > 0 {
@@ -112,6 +179,7 @@ func (node *RPCNode) UpdateLatest() error {
 }
 
 func (node *RPCNode) fetchHeader(num *big.Int) (*blockInfo, error) {
+	node.throttle.Take()
 	log.Debug("Doing check", "node", node.name, "requested", num)
 	h, err := node.ethCli.HeaderByNumber(context.Background(), num)
 	if err != nil {

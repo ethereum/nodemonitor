@@ -5,17 +5,44 @@ reload_interval = "10s"
 # If specified, a http server will serve static content here
 server_address = "0.0.0.0:8080"
 
-[[clients]]
-url = "http://localhost:8546"
-name = "geth"
+# Third party providers
+infura_key = "your_key"
+infura_endpoint="https://mainnet.infura.io/v3/"
+alchemy_key = "your_key"
+alchemy_endpoint = "https://eth-mainnet.alchemyapi.io/v2/"
+
 
 [[clients]]
-url = "http://localhost:8547"
-name = "besu"
+  # The 'rpc' kind is a regular rpc-node
+  kind="rpc"
+  url = "http://localhost:8546"
+  name = "geth"
 
 [[clients]]
-url = "http://localhost:8548"
-name = "openethereum"
+
+  kind="rpc"
+  url = "http://localhost:8547"
+  name = "besu"
+
+[[clients]]
+
+  kind="rpc"
+  url = "http://localhost:8548"
+  name = "openethereum"
+
+[[clients]]
+
+  # The 'infura' kind needs credentials
+  kind="infura"
+  name = "infura"
+  # The rate_limit is number of requests per second allowed through
+  rate_limit=5
+
+[[clients]]
+
+  kind="alchemy"
+  name = "alchemy"
+  rate_limit=5
 
 [Metrics]
 
