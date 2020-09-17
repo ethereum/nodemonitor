@@ -200,6 +200,7 @@ func (mon *NodeMonitor) doChecks() {
 	}
 	if time.Since(mon.lastClean) > time.Minute*10 {
 		cleanHashes("www/hashes/", r.Hashes)
+		mon.lastClean = time.Now()
 	}
 }
 

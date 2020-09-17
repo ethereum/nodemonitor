@@ -17,7 +17,7 @@ let utils = {
         if (hashstr.length !== 66){
             return hashstr
         }
-        hashstr =  hashstr.slice(0,8)+"…"//+hashstr.slice(-6);
+        hashstr =  hashstr.slice(2,8) // +"…"//+hashstr.slice(-6);
         return hashstr
     },
     etherscanLink : function(hash){
@@ -225,7 +225,10 @@ function showblock(hash){
                 miniFIFO.store(hash, data)
                 populateBlockInfo(data)
             },
-            failure: function(status, err){ alert(err); },
+            error: function(status, err){
+                populateBlockInfo({"hash": hash})
+                progress("Failed to fetch hash: " + status.statusText + " error: " + err);
+                },
         })
     }
 }
