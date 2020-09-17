@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
+	"regexp"
 	"sort"
 	"sync"
 	"time"
@@ -26,6 +28,7 @@ type NodeMonitor struct {
 	backend        *blockDB
 	wg             sync.WaitGroup
 	reloadInterval time.Duration
+	lastClean      time.Time
 }
 
 // NewMonitor creates a new NodeMonitor
@@ -195,6 +198,39 @@ func (mon *NodeMonitor) doChecks() {
 			}
 		}
 	}
+	if time.Since(mon.lastClean) > time.Minute*10 {
+		cleanHashes("www/hashes/", r.Hashes)
+	}
+}
+
+var fileRe = regexp.MustCompile(`^0x([a-z0-9.]+).json$`)
+
+func cleanHashes(hashdir string, skip []common.Hash) {
+	// And clean out old hashes-files
+	files, err := ioutil.ReadDir(hashdir)
+
+	if err != nil {
+		log.Warn("Cleaning hashes failed", "error", err)
+		return
+	}
+	skipMap := make(map[common.Hash]bool)
+	for _, h := range skip {
+		skipMap[h] = true
+	}
+	count := 0
+	for _, f := range files {
+		match := fileRe.FindStringSubmatch(f.Name())
+		if match == nil {
+			continue
+		}
+		hash := common.HexToHash(match[1])
+		if _, ok := skipMap[hash]; ok {
+			continue
+		}
+		os.Remove(filepath.Join(hashdir, f.Name()))
+		count++
+	}
+	log.Info("Cleaned hashes", "files", count)
 }
 
 // For any differences, we want to figure out the split-block.
