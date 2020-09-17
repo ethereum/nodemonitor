@@ -7,6 +7,7 @@ import (
 	"go.uber.org/ratelimit"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -21,8 +22,9 @@ const (
 )
 
 type blockInfo struct {
-	num  uint64
-	hash common.Hash
+	num   uint64
+	hash  common.Hash
+	pHash common.Hash
 }
 
 func (bl *blockInfo) TerminalString() string {
@@ -35,6 +37,7 @@ type Node interface {
 	Version() (string, error)
 	Name() string
 	Status() int
+	LastProgress() int64
 	SetStatus(int)
 	UpdateLatest() error
 	BlockAt(num uint64, force bool) *blockInfo
@@ -54,9 +57,12 @@ type RPCNode struct {
 	db     *blockDB
 	status int
 
+	lastProgress int64 // Last unix-time the node progressed the chain
+
 	headGauge metrics.Gauge
 	// rate limiting
-	throttle ratelimit.Limiter
+	throttle  ratelimit.Limiter
+	lastCheck map[string]time.Time
 }
 
 func NewRPCNode(name string, url string, db *blockDB, rateLimit int) (*RPCNode, error) {
@@ -79,6 +85,7 @@ func NewRPCNode(name string, url string, db *blockDB, rateLimit int) (*RPCNode, 
 		db:           db,
 		headGauge:    metrics.GetOrRegisterGauge(gaugeName, registry),
 		throttle:     throttle,
+		lastCheck:    make(map[string]time.Time),
 	}, nil
 }
 
@@ -106,6 +113,7 @@ func NewInfuraNode(name, projectId, endpoint string, db *blockDB, rateLimit int)
 		db:           db,
 		headGauge:    metrics.GetOrRegisterGauge(gaugeName, registry),
 		throttle:     throttle,
+		lastCheck:    make(map[string]time.Time),
 	}, nil
 }
 
@@ -133,6 +141,7 @@ func NewAlchemyNode(name, apiKey, endpoint string, db *blockDB, rateLimit int) (
 		db:           db,
 		headGauge:    metrics.GetOrRegisterGauge(gaugeName, registry),
 		throttle:     throttle,
+		lastCheck:    make(map[string]time.Time),
 	}, nil
 }
 
@@ -145,14 +154,18 @@ func (node *RPCNode) Status() int {
 }
 
 func (node *RPCNode) Version() (string, error) {
+	method := "web3_clientVersion"
+	// Don't request version more than once every 30 seconds
+	if time.Since(node.lastCheck[method]) < time.Second*30 {
+		return node.version, nil
+	}
+	node.lastCheck[method] = time.Now()
+
 	node.throttle.Take()
 	var ver string
-	err := node.rpcCli.CallContext(context.Background(), &ver, "web3_clientVersion")
+	err := node.rpcCli.CallContext(context.Background(), &ver, method)
 	if err == nil {
-		parts := strings.Split(ver, "/")
-		if len(parts) > 0 {
-			node.version = strings.Join(parts[1:], "/")
-		}
+		node.version = ver
 	}
 	return ver, err
 }
@@ -168,22 +181,31 @@ func (node *RPCNode) Name() string {
 	return node.name
 }
 
+func (node *RPCNode) LastProgress() int64 {
+	return node.lastProgress
+}
+
 func (node *RPCNode) UpdateLatest() error {
 	bl, err := node.fetchHeader(nil)
 	if err != nil {
 		return err
 	}
-	node.latest = bl
-	node.headGauge.Update(int64(bl.num))
+	if node.latest == nil || node.latest.hash != bl.hash {
+		node.lastProgress = time.Now().Unix()
+		node.latest = bl
+		node.headGauge.Update(int64(bl.num))
+		log.Info("Set last progress to ", "time", node.lastProgress)
+	}
 	return nil
 }
 
-func (node *RPCNode) fetchHeader(num *big.Int) (*blockInfo, error) {
+// throttledGetHeader fetches header at num, applies throttling and
+// stores the header info in the node chain and the backend
+func (node *RPCNode) throttledGetHeader(num *big.Int) (*blockInfo, error) {
 	node.throttle.Take()
 	log.Debug("Doing check", "node", node.name, "requested", num)
 	h, err := node.ethCli.HeaderByNumber(context.Background(), num)
 	if err != nil {
-		//log.Error("Blockcheck error", "error", err)
 		return nil, err
 	}
 	if h == nil {
@@ -194,11 +216,41 @@ func (node *RPCNode) fetchHeader(num *big.Int) (*blockInfo, error) {
 		node.db.add(h.Hash(), h)
 	}
 	bl := &blockInfo{
-		num:  h.Number.Uint64(),
-		hash: h.Hash(),
+		num:   h.Number.Uint64(),
+		hash:  h.Hash(),
+		pHash: h.ParentHash,
 	}
 	node.chainHistory[bl.num] = bl
 	return bl, nil
+}
+
+func (node *RPCNode) fetchHeader(num *big.Int) (*blockInfo, error) {
+	hdr, err := node.throttledGetHeader(num)
+	if err != nil {
+		return hdr, err
+	}
+	// If we have a parent for this block, we can check if it's still valid
+	if parentInfo, ok := node.chainHistory[hdr.num-1]; ok {
+		current := hdr
+		reorgs := 0
+		for parentInfo != nil {
+			if parentInfo.hash == current.pHash {
+				break // not reorged
+			}
+			reorgs++
+			delete(node.chainHistory, parentInfo.num) // wipe and refetch parent
+			current, err = node.throttledGetHeader(new(big.Int).SetUint64(parentInfo.num))
+			if err != nil {
+				break
+			}
+			parentInfo = node.chainHistory[current.num-1]
+		}
+		if reorgs > 1 {
+			log.Info("Node reorged", "name", node.name, "size", reorgs)
+		}
+	}
+
+	return hdr, nil
 }
 
 func (node *RPCNode) BlockAt(num uint64, force bool) *blockInfo {
@@ -222,9 +274,10 @@ func (node *RPCNode) HashAt(num uint64, force bool) common.Hash {
 }
 
 type clientJson struct {
-	Version string
-	Name    string
-	Status  int
+	Version      string
+	Name         string
+	Status       int
+	LastProgress int64
 }
 
 // Report represents one 'snapshot' of the state of the nodes, where they are at
@@ -281,9 +334,10 @@ func (r *Report) AddToReport(node Node) {
 	v, _ := node.Version()
 	r.Cols = append(r.Cols,
 		&clientJson{
-			Version: v,
-			Name:    node.Name(),
-			Status:  node.Status(),
+			Version:      v,
+			Name:         node.Name(),
+			Status:       node.Status(),
+			LastProgress: node.LastProgress(),
 		},
 	)
 	for _, num := range r.Numbers {

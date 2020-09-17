@@ -52,6 +52,10 @@ func (b brokenNode) HeadNum() uint64 {
 	return 0
 }
 
+func (b brokenNode) LastProgress() int64 {
+	return 0
+}
+
 func newTestNode(id string, head int, chain []*blockInfo) *testNode {
 	return &testNode{
 		id,
@@ -96,6 +100,10 @@ func (t *testNode) HashAt(num uint64, force bool) common.Hash {
 
 func (t *testNode) HeadNum() uint64 {
 	return uint64(t.head)
+}
+
+func (t *testNode) LastProgress() int64 {
+	return 0
 }
 
 func TestMonitor(t *testing.T) {

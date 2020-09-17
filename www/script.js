@@ -140,6 +140,10 @@ function onData(data){
         let name = client.Name
         let version = client.Version
         let status = "OK"
+        let progress = "Never"
+        if (client.LastProgress > 0){
+            progress = humanFriendly.timeSince(new Date(client.LastProgress*1000)) + " ago"
+        }
         if (client.Status != 0) {
             status = " (unhealthy)"
         }
@@ -147,6 +151,7 @@ function onData(data){
         tRow.append(utils.tag("td", name))
         tRow.append(utils.tag("td", version))
         tRow.append(utils.tag("td", status))
+        tRow.append(utils.tag("td", progress))
         nodeB.append(tRow)
         // Add td headings
         thead.append(utils.tag("th", name))
