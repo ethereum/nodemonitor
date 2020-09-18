@@ -11,6 +11,18 @@ let utils = {
         }
         return d
     },
+    slantedHeading: function(title){
+        // What we're aiming for:
+        // <th class="rotate"><div><span>Column header 1</span></div></th>
+        // See https://css-tricks.com/rotated-table-column-headers/
+        let div = utils.tag("div")
+        div.append(utils.tag("span", title))
+        let th = utils.tag("th", )
+        th.append(div)
+        $(th).addClass("rotate")
+        return th
+    },
+
     // shortHash expects input to be a full 64-char hex input
     // and produces an abbreviated clickable represenation
     shortHash: function(hashstr){
@@ -134,7 +146,8 @@ function onData(data){
     // Clear headings
     var thead = $("#table thead")
     thead.empty()
-    thead.append(utils.tag("th", "Number"))
+
+    thead.append(utils.slantedHeading("Number"))
 
     data.Cols.forEach(function(client) {
         let name = client.Name
@@ -154,7 +167,7 @@ function onData(data){
         tRow.append(utils.tag("td", progress))
         nodeB.append(tRow)
         // Add td headings
-        thead.append(utils.tag("th", name))
+        thead.append(utils.slantedHeading(name))
     })
     // Clear rows
     var tbody = $("#table tbody")
