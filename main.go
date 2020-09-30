@@ -82,6 +82,9 @@ func spinupMonitor(config nodes.Config) (*nodes.NodeMonitor, error) {
 				db, c.Ratelimit)
 		case "rpc":
 			node, err = nodes.NewRPCNode(c.Name, c.Url, db, c.Ratelimit)
+		case "etherscan":
+			node, err = nodes.NewEtherscanNode(c.Name, config.EtherscanKey, config.EtherscanEndpoint,
+				db, c.Ratelimit)
 		default:
 			log.Error("Wrong client type", "kind", c.Kind, "available", "[rpc, infura, alchemy]")
 			return nil, errors.New("invalid config")
