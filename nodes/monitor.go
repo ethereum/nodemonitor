@@ -42,7 +42,7 @@ func NewMonitor(nodes []Node, db *blockDB, reload time.Duration) (*NodeMonitor, 
 		} else {
 			node.SetStatus(NodeStatusOK)
 		}
-		log.Info("RPCNode OK", "version", v)
+		log.Info("RemoteNode OK", "version", v)
 	}
 	if reload == 0 {
 		reload = 10 * time.Second

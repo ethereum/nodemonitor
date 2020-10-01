@@ -16,37 +16,38 @@ import (
 	"go.uber.org/ratelimit"
 )
 
-type HeaderCall interface {
+type RPCMethodCaller interface {
 	HeaderByNumber(*big.Int) (*types.Header, error)
 	Version() (string, error)
 }
 
-type RPCHeaderCall struct {
+type JSONRPCMethodCaller struct {
 	rpcCli *rpc.Client
 	ethCli *ethclient.Client
 }
 
-func NewRPCHeaderCall(rpcCli *rpc.Client, ethCli *ethclient.Client) *RPCHeaderCall {
-	return &RPCHeaderCall{
+func NewRPCHeaderCall(rpcCli *rpc.Client, ethCli *ethclient.Client) *JSONRPCMethodCaller {
+	return &JSONRPCMethodCaller{
 		rpcCli: rpcCli,
 		ethCli: ethCli,
 	}
 }
 
-func (caller *RPCHeaderCall) Version() (string, error) {
+func (caller *JSONRPCMethodCaller) Version() (string, error) {
 	method := "web3_clientVersion"
 	var ver string
 	err := caller.rpcCli.CallContext(context.Background(), &ver, method)
 	return ver, err
 }
 
-func (caller *RPCHeaderCall) HeaderByNumber(num *big.Int) (*types.Header, error) {
+func (caller *JSONRPCMethodCaller) HeaderByNumber(num *big.Int) (*types.Header, error) {
 	return caller.ethCli.HeaderByNumber(context.Background(), num)
 }
 
-// RPCNode represents a node that is reachable via JSON-rpc
-type RPCNode struct {
-	HeaderCall
+// RemoteNode represents a remote node that we can make queries against
+type RemoteNode struct {
+	RPCMethodCaller // The actual call implementation, json-rpc or http queries
+	// Some local cached values
 	version      string
 	name         string
 	latest       *blockInfo
@@ -63,7 +64,7 @@ type RPCNode struct {
 	lastCheck map[string]time.Time
 }
 
-func NewRPCNode(name string, url string, db *blockDB, rateLimit int) (*RPCNode, error) {
+func NewRPCNode(name string, url string, db *blockDB, rateLimit int) (*RemoteNode, error) {
 	rpcCli, err := rpc.Dial(url)
 	if err != nil {
 		return nil, err
@@ -74,19 +75,19 @@ func NewRPCNode(name string, url string, db *blockDB, rateLimit int) (*RPCNode, 
 	}
 	ethCli := ethclient.NewClient(rpcCli)
 	gaugeName := fmt.Sprintf("head/%v", name)
-	return &RPCNode{
-		HeaderCall:   NewRPCHeaderCall(rpcCli, ethCli),
-		name:         name,
-		version:      "n/a",
-		chainHistory: make(map[uint64]*blockInfo),
-		db:           db,
-		headGauge:    metrics.GetOrRegisterGauge(gaugeName, registry),
-		throttle:     throttle,
-		lastCheck:    make(map[string]time.Time),
+	return &RemoteNode{
+		RPCMethodCaller: NewRPCHeaderCall(rpcCli, ethCli),
+		name:            name,
+		version:         "n/a",
+		chainHistory:    make(map[uint64]*blockInfo),
+		db:              db,
+		headGauge:       metrics.GetOrRegisterGauge(gaugeName, registry),
+		throttle:        throttle,
+		lastCheck:       make(map[string]time.Time),
 	}, nil
 }
 
-func NewInfuraNode(name, projectId, endpoint string, db *blockDB, rateLimit int) (*RPCNode, error) {
+func NewInfuraNode(name, projectId, endpoint string, db *blockDB, rateLimit int) (*RemoteNode, error) {
 	if len(projectId) == 0 {
 		return nil, errors.New("Missing infura_key")
 	}
@@ -101,19 +102,19 @@ func NewInfuraNode(name, projectId, endpoint string, db *blockDB, rateLimit int)
 	if rateLimit > 0 {
 		throttle = ratelimit.New(rateLimit)
 	}
-	return &RPCNode{
-		HeaderCall:   NewRPCHeaderCall(rpcCli, ethCli),
-		name:         name,
-		version:      "Infura V3",
-		chainHistory: make(map[uint64]*blockInfo),
-		db:           db,
-		headGauge:    metrics.GetOrRegisterGauge(gaugeName, registry),
-		throttle:     throttle,
-		lastCheck:    make(map[string]time.Time),
+	return &RemoteNode{
+		RPCMethodCaller: NewRPCHeaderCall(rpcCli, ethCli),
+		name:            name,
+		version:         "Infura V3",
+		chainHistory:    make(map[uint64]*blockInfo),
+		db:              db,
+		headGauge:       metrics.GetOrRegisterGauge(gaugeName, registry),
+		throttle:        throttle,
+		lastCheck:       make(map[string]time.Time),
 	}, nil
 }
 
-func NewAlchemyNode(name, apiKey, endpoint string, db *blockDB, rateLimit int) (*RPCNode, error) {
+func NewAlchemyNode(name, apiKey, endpoint string, db *blockDB, rateLimit int) (*RemoteNode, error) {
 	if len(apiKey) == 0 {
 		return nil, errors.New("Missing alchemy_key")
 	}
@@ -128,27 +129,27 @@ func NewAlchemyNode(name, apiKey, endpoint string, db *blockDB, rateLimit int) (
 	if rateLimit > 0 {
 		throttle = ratelimit.New(rateLimit)
 	}
-	return &RPCNode{
-		HeaderCall:   NewRPCHeaderCall(rpcCli, ethCli),
-		name:         name,
-		version:      "Alchemy V2",
-		chainHistory: make(map[uint64]*blockInfo),
-		db:           db,
-		headGauge:    metrics.GetOrRegisterGauge(gaugeName, registry),
-		throttle:     throttle,
-		lastCheck:    make(map[string]time.Time),
+	return &RemoteNode{
+		RPCMethodCaller: NewRPCHeaderCall(rpcCli, ethCli),
+		name:            name,
+		version:         "Alchemy V2",
+		chainHistory:    make(map[uint64]*blockInfo),
+		db:              db,
+		headGauge:       metrics.GetOrRegisterGauge(gaugeName, registry),
+		throttle:        throttle,
+		lastCheck:       make(map[string]time.Time),
 	}, nil
 }
 
-func (node *RPCNode) SetStatus(status int) {
+func (node *RemoteNode) SetStatus(status int) {
 	node.status = status
 }
 
-func (node *RPCNode) Status() int {
+func (node *RemoteNode) Status() int {
 	return node.status
 }
 
-func (node *RPCNode) Version() (string, error) {
+func (node *RemoteNode) Version() (string, error) {
 	method := "web3_clientVersion"
 	// Don't request version more than once every 30 seconds
 	if time.Since(node.lastCheck[method]) < time.Second*30 {
@@ -157,29 +158,29 @@ func (node *RPCNode) Version() (string, error) {
 	node.lastCheck[method] = time.Now()
 
 	node.throttle.Take()
-	ver, err := node.HeaderCall.Version()
+	ver, err := node.RPCMethodCaller.Version()
 	if err == nil {
 		node.version = ver
 	}
 	return ver, err
 }
 
-func (node *RPCNode) HeadNum() uint64 {
+func (node *RemoteNode) HeadNum() uint64 {
 	if node.latest != nil {
 		return node.latest.num
 	}
 	return 0
 }
 
-func (node *RPCNode) Name() string {
+func (node *RemoteNode) Name() string {
 	return node.name
 }
 
-func (node *RPCNode) LastProgress() int64 {
+func (node *RemoteNode) LastProgress() int64 {
 	return node.lastProgress
 }
 
-func (node *RPCNode) UpdateLatest() error {
+func (node *RemoteNode) UpdateLatest() error {
 	bl, err := node.fetchHeader(nil)
 	if err != nil {
 		return err
@@ -195,10 +196,10 @@ func (node *RPCNode) UpdateLatest() error {
 
 // throttledGetHeader fetches header at num, applies throttling and
 // stores the header info in the node chain and the backend
-func (node *RPCNode) throttledGetHeader(num *big.Int) (*blockInfo, error) {
+func (node *RemoteNode) throttledGetHeader(num *big.Int) (*blockInfo, error) {
 	node.throttle.Take()
 	log.Debug("Doing check", "node", node.name, "requested", num)
-	h, err := node.HeaderCall.HeaderByNumber(num)
+	h, err := node.RPCMethodCaller.HeaderByNumber(num)
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +219,7 @@ func (node *RPCNode) throttledGetHeader(num *big.Int) (*blockInfo, error) {
 	return bl, nil
 }
 
-func (node *RPCNode) fetchHeader(num *big.Int) (*blockInfo, error) {
+func (node *RemoteNode) fetchHeader(num *big.Int) (*blockInfo, error) {
 	hdr, err := node.throttledGetHeader(num)
 	if err != nil {
 		return hdr, err
@@ -247,7 +248,7 @@ func (node *RPCNode) fetchHeader(num *big.Int) (*blockInfo, error) {
 	return hdr, nil
 }
 
-func (node *RPCNode) BlockAt(num uint64, force bool) *blockInfo {
+func (node *RemoteNode) BlockAt(num uint64, force bool) *blockInfo {
 	if node.latest != nil && node.latest.num < num {
 		return nil // that block is future, don't bother
 	}
@@ -260,7 +261,7 @@ func (node *RPCNode) BlockAt(num uint64, force bool) *blockInfo {
 	return bl
 }
 
-func (node *RPCNode) HashAt(num uint64, force bool) common.Hash {
+func (node *RemoteNode) HashAt(num uint64, force bool) common.Hash {
 	if bl := node.BlockAt(num, force); bl != nil {
 		return bl.hash
 	}

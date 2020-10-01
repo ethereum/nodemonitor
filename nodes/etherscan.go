@@ -14,18 +14,18 @@ import (
 	"go.uber.org/ratelimit"
 )
 
-// ethScanHeaderCall wraps calls to etherscan.
-type ethScanHeaderCall struct {
+// etherscanMethodCaller wraps calls to etherscan.
+type etherscanMethodCaller struct {
 	url    string
 	apiKey string
 }
 
-func NewEtherscanHeaderCall(url, apiKey string) *ethScanHeaderCall {
-	return &ethScanHeaderCall{url: url, apiKey: apiKey}
+func NewEtherscanHeaderCall(url, apiKey string) *etherscanMethodCaller {
+	return &etherscanMethodCaller{url: url, apiKey: apiKey}
 }
 
-func (caller *ethScanHeaderCall) Version() (string, error) {
-	return "0x0", nil
+func (caller *etherscanMethodCaller) Version() (string, error) {
+	return "Not available", nil
 }
 
 type jsonrpcMessage struct {
@@ -36,7 +36,7 @@ type jsonrpcMessage struct {
 	Result  json.RawMessage `json:"result,omitempty"`
 }
 
-func (caller *ethScanHeaderCall) HeaderByNumber(num *big.Int) (*types.Header, error) {
+func (caller *etherscanMethodCaller) HeaderByNumber(num *big.Int) (*types.Header, error) {
 	action := "eth_getBlockByNumber"
 	tag := num.String()
 	if num == nil {
@@ -61,7 +61,7 @@ func (caller *ethScanHeaderCall) HeaderByNumber(num *big.Int) (*types.Header, er
 	return head, nil
 }
 
-func NewEtherscanNode(name, apiKey, endpoint string, db *blockDB, rateLimit int) (*RPCNode, error) {
+func NewEtherscanNode(name, apiKey, endpoint string, db *blockDB, rateLimit int) (*RemoteNode, error) {
 	if len(apiKey) == 0 {
 		return nil, errors.New("Missing etherscan_key")
 	}
@@ -71,14 +71,14 @@ func NewEtherscanNode(name, apiKey, endpoint string, db *blockDB, rateLimit int)
 		throttle = ratelimit.New(rateLimit)
 	}
 
-	return &RPCNode{
-		HeaderCall:   NewEtherscanHeaderCall(endpoint, apiKey),
-		name:         name,
-		version:      "Etherscan",
-		chainHistory: make(map[uint64]*blockInfo),
-		db:           db,
-		headGauge:    metrics.GetOrRegisterGauge(gaugeName, registry),
-		throttle:     throttle,
-		lastCheck:    make(map[string]time.Time),
+	return &RemoteNode{
+		RPCMethodCaller: NewEtherscanHeaderCall(endpoint, apiKey),
+		name:            name,
+		version:         "Etherscan",
+		chainHistory:    make(map[uint64]*blockInfo),
+		db:              db,
+		headGauge:       metrics.GetOrRegisterGauge(gaugeName, registry),
+		throttle:        throttle,
+		lastCheck:       make(map[string]time.Time),
 	}, nil
 }
