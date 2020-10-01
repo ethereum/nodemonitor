@@ -1,33 +1,33 @@
 package nodes
 
-import (
-)
-
 type Config struct {
 	ReloadInterval string
 	ServerAddress  string
 	Clients        []ClientInfo
-	Metrics metricsConfig
+	Metrics        metricsConfig
 
-	InfuraKey string
+	InfuraKey      string
 	InfuraEndpoint string
 
-	AlchemyKey string
+	AlchemyKey      string
 	AlchemyEndpoint string
+
+	EtherscanKey      string
+	EtherscanEndpoint string
 }
 
-type metricsConfig struct{
-	Enabled bool
-	Endpoint string
-	Username string
-	Database string
-	Password string
+type metricsConfig struct {
+	Enabled   bool
+	Endpoint  string
+	Username  string
+	Database  string
+	Password  string
 	Namespace string
 }
 
 type ClientInfo struct {
-	Url  string
-	Name string
-	Kind string
+	Url       string
+	Name      string
+	Kind      string
 	Ratelimit int
 }

@@ -36,5 +36,20 @@ func TestAlchemy(t *testing.T) {
 		t.Errorf("Got latest block 0")
 	}
 	t.Logf("Latest is %v", node.HeadNum())
+}
 
+func TestEtherscan(t *testing.T) {
+	key := os.Getenv("ETHERSCAN_KEY")
+	fmt.Printf("key: %v\n", key)
+	node, err := NewEtherscanNode("Etherscan", key, "https://api.etherscan.io/api", nil, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := node.UpdateLatest(); err != nil {
+		t.Fatal(err)
+	}
+	if node.HeadNum() == 0 {
+		t.Errorf("Got latest block 0")
+	}
+	t.Logf("Latest is %v", node.HeadNum())
 }
