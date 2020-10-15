@@ -206,6 +206,18 @@ function onData(data){
         }
         tbody.append(row)
     })
+
+    // Populate bad block info
+    var badblocksB = $("#badblocks tbody")
+    badblocksB.empty()
+    data.BadBlocks.forEach(function(badblock) {
+        let tRow = utils.tag("tr")
+        tRow.append(utils.tag("td", badblock.Client))
+        tRow.append(utils.tag("td", utils.shortHash(badblock.Hash)))
+        tRow.append(utils.tag("td", badblock.RLP))
+        $(tRow).on('click', function(){showblock(badblock)})
+        badblocksB.append(tRow)
+    })
 }
 
 

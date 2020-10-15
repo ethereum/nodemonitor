@@ -278,10 +278,10 @@ func (node *RemoteNode) HashAt(num uint64, force bool) common.Hash {
 	return common.Hash{}
 }
 
-func (node *RemoteNode) BadBlocks() uint64 {
+func (node *RemoteNode) BadBlocks() []*eth.BadBlockArgs {
 	args, err := node.GetBadBlocks()
 	if err != nil {
-		return uint64(len(args))
+		return args
 	}
-	return 0
+	return []*eth.BadBlockArgs{}
 }

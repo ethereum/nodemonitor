@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -56,8 +57,8 @@ func (b brokenNode) LastProgress() int64 {
 	return 0
 }
 
-func (b brokenNode) BadBlocks() uint64 {
-	return 0
+func (b brokenNode) BadBlocks() []*eth.BadBlockArgs {
+	return []*eth.BadBlockArgs{}
 }
 
 func newTestNode(id string, head int, chain []*blockInfo) *testNode {
@@ -110,8 +111,8 @@ func (t *testNode) LastProgress() int64 {
 	return 0
 }
 
-func (t *testNode) BadBlocks() uint64 {
-	return 0
+func (t *testNode) BadBlocks() []*eth.BadBlockArgs {
+	return []*eth.BadBlockArgs{}
 }
 
 func TestMonitor(t *testing.T) {
