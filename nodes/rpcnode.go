@@ -281,7 +281,7 @@ func (node *RemoteNode) HashAt(num uint64, force bool) common.Hash {
 func (node *RemoteNode) BadBlocks() []*eth.BadBlockArgs {
 	args, err := node.GetBadBlocks()
 	if err != nil {
-		return args
+		return []*eth.BadBlockArgs{}
 	}
-	return []*eth.BadBlockArgs{}
+	return args
 }

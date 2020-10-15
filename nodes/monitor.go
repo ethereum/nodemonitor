@@ -177,6 +177,11 @@ func (mon *NodeMonitor) doChecks() {
 		log.Warn("Failed to write file", "error", err)
 		return
 	}
+	mon.provideHashes(r)
+	mon.provideBadBlocks(r)
+}
+
+func (mon *NodeMonitor) provideHashes(r *Report) {
 	// And now provide relevant hashes
 	for _, hash := range r.Hashes {
 		hdr := mon.backend.get(hash)
@@ -201,6 +206,45 @@ func (mon *NodeMonitor) doChecks() {
 	if time.Since(mon.lastClean) > time.Minute*10 {
 		cleanHashes("www/hashes/", r.Hashes)
 		mon.lastClean = time.Now()
+	}
+}
+
+func (mon *NodeMonitor) provideBadBlocks(r *Report) {
+	for _, block := range r.BadBlocks {
+		fname := fmt.Sprintf("www/badblocks/0x%x.json", block.Hash)
+		// only write it if it isn't already there
+		if _, err := os.Stat(fname); os.IsNotExist(err) {
+			var data []byte
+			// try to retrieve header from backend
+			if bl := mon.backend.get(block.Hash); bl != nil {
+				data, err = json.MarshalIndent(bl, "", " ")
+				if err != nil {
+					log.Warn("Failed to marshall header", "error", err)
+				}
+			}
+			if len(data) == 0 {
+				// block not found in backend, print what we know
+				type msBadBlockJSON struct {
+					Client string
+					Hash   common.Hash
+					RLP    string
+				}
+				b := msBadBlockJSON{
+					Client: block.Client,
+					Hash:   block.Hash,
+					RLP:    block.RLP,
+				}
+				data, err = json.MarshalIndent(b, "", " ")
+				if err != nil {
+					log.Warn("Failed to marshall header", "error", err)
+					continue
+				}
+			}
+			if err := ioutil.WriteFile(fname, data, 0777); err != nil {
+				log.Warn("Failed to write file", "error", err)
+				return
+			}
+		}
 	}
 }
 

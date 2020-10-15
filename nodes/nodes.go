@@ -49,7 +49,7 @@ type clientJson struct {
 type badBlockJson struct {
 	Client string
 	Hash   common.Hash
-	RLP    string
+	RLP    string `json:"-"`
 }
 
 // Report represents one 'snapshot' of the state of the nodes, where they are at
@@ -64,9 +64,10 @@ type Report struct {
 
 func NewReport(headList []int) *Report {
 	return &Report{
-		Numbers: headList,
-		Cols:    nil,
-		Rows:    make(map[int][]string),
+		Numbers:   headList,
+		Cols:      nil,
+		Rows:      make(map[int][]string),
+		BadBlocks: make([]*badBlockJson, 0),
 	}
 }
 
