@@ -154,11 +154,15 @@ function onData(data){
         let version = client.Version
         let status = "OK"
         let progress = "Never"
+        let badblocks = "0"
         if (client.LastProgress > 0){
             progress = humanFriendly.timeSince(new Date(client.LastProgress*1000)) + " ago"
         }
         if (client.Status != 0) {
             status = " (unhealthy)"
+        }
+        if (client.BadBlocks > 0) {
+            badblocks = client.BadBlocks
         }
         let tRow = utils.tag("tr")
         tRow.append(utils.tag("td", name))

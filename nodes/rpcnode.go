@@ -9,6 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -19,6 +20,7 @@ import (
 type RPCMethodCaller interface {
 	HeaderByNumber(*big.Int) (*types.Header, error)
 	Version() (string, error)
+	GetBadBlocks() ([]*eth.BadBlockArgs, error)
 }
 
 type JSONRPCMethodCaller struct {
@@ -42,6 +44,14 @@ func (caller *JSONRPCMethodCaller) Version() (string, error) {
 
 func (caller *JSONRPCMethodCaller) HeaderByNumber(num *big.Int) (*types.Header, error) {
 	return caller.ethCli.HeaderByNumber(context.Background(), num)
+}
+
+func (caller *JSONRPCMethodCaller) GetBadBlocks() ([]*eth.BadBlockArgs, error) {
+	method := "debug_getBadBlocks"
+	var blocks []*eth.BadBlockArgs
+	err := caller.rpcCli.CallContext(context.Background(), &blocks, method)
+	// TODO check if error is method not available
+	return blocks, err
 }
 
 // RemoteNode represents a remote node that we can make queries against
@@ -266,4 +276,12 @@ func (node *RemoteNode) HashAt(num uint64, force bool) common.Hash {
 		return bl.hash
 	}
 	return common.Hash{}
+}
+
+func (node *RemoteNode) BadBlocks() uint64 {
+	args, err := node.GetBadBlocks()
+	if err != nil {
+		return uint64(len(args))
+	}
+	return 0
 }

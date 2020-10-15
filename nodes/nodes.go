@@ -34,6 +34,7 @@ type Node interface {
 	BlockAt(num uint64, force bool) *blockInfo
 	HashAt(num uint64, force bool) common.Hash
 	HeadNum() uint64
+	BadBlocks() uint64
 }
 
 type clientJson struct {

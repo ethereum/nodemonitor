@@ -56,6 +56,10 @@ func (b brokenNode) LastProgress() int64 {
 	return 0
 }
 
+func (b brokenNode) BadBlocks() uint64 {
+	return 0
+}
+
 func newTestNode(id string, head int, chain []*blockInfo) *testNode {
 	return &testNode{
 		id,
@@ -103,6 +107,10 @@ func (t *testNode) HeadNum() uint64 {
 }
 
 func (t *testNode) LastProgress() int64 {
+	return 0
+}
+
+func (t *testNode) BadBlocks() uint64 {
 	return 0
 }
 
