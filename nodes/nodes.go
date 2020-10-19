@@ -104,21 +104,8 @@ func (r *Report) Print() {
 }
 
 // AddToReport adds the given node to the report
-func (r *Report) AddToReport(node Node) {
-	var (
-		v, _      = node.Version()
-		badBlocks = node.BadBlocks()
-	)
-	// Add bad blocks to report
-	for _, block := range badBlocks {
-		r.BadBlocks = append(r.BadBlocks,
-			&badBlockJson{
-				Client: node.Name(),
-				Hash:   block.Hash,
-				RLP:    block.RLP,
-			},
-		)
-	}
+func (r *Report) AddToReport(node Node, badBlocks map[common.Hash]*badBlockJson) {
+	v, _ := node.Version()
 	// Add general node properties
 	r.Cols = append(r.Cols,
 		&clientJson{
@@ -129,6 +116,11 @@ func (r *Report) AddToReport(node Node) {
 			BadBlocks:    len(badBlocks),
 		},
 	)
+	// Add bad blocks
+	for _, block := range badBlocks {
+		r.BadBlocks = append(r.BadBlocks, block)
+	}
+	// Add hashes
 	for _, num := range r.Numbers {
 		row := r.Rows[num]
 		block := node.BlockAt(uint64(num), false)
