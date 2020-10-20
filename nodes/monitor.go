@@ -236,17 +236,24 @@ func (mon *NodeMonitor) provideBadBlocks() {
 				var data []byte
 				// try to retrieve header from backend
 				if bl := mon.backend.get(block.Hash); bl != nil {
-					data, err = json.MarshalIndent(bl, "", " ")
+					type Header types.Header
+					data, err = json.MarshalIndent(struct {
+						Header
+						RLP string `json:"rlp"`
+					}{
+						Header: Header(*bl),
+						RLP:    block.RLP,
+					}, "", " ")
 					if err != nil {
-						log.Warn("Failed to marshall header", "error", err)
+						log.Warn("Failed to marshal header", "error", err)
 					}
 				}
 				if len(data) == 0 {
 					// block not found in backend, print what we know
 					type msBadBlockJSON struct {
-						Client string
-						Hash   common.Hash
-						RLP    string
+						Client string      `json:"client"`
+						Hash   common.Hash `json:"hash"`
+						RLP    string      `json:"rlp"`
 					}
 					b := msBadBlockJSON{
 						Client: block.Client,
@@ -255,7 +262,7 @@ func (mon *NodeMonitor) provideBadBlocks() {
 					}
 					data, err = json.MarshalIndent(b, "", " ")
 					if err != nil {
-						log.Warn("Failed to marshall header", "error", err)
+						log.Warn("Failed to marshal header", "error", err)
 						continue
 					}
 				}
