@@ -199,7 +199,7 @@ func (node *RemoteNode) UpdateLatest() error {
 		node.lastProgress = time.Now().Unix()
 		node.latest = bl
 		node.headGauge.Update(int64(bl.num))
-		log.Info("Set last progress to ", "time", node.lastProgress)
+		log.Trace("Set last progress to ", "time", node.lastProgress)
 	}
 	return nil
 }

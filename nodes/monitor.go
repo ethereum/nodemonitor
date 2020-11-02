@@ -105,7 +105,9 @@ func (mon *NodeMonitor) doChecks() {
 
 	var heads = make(map[uint64]bool)
 	var activeNodes []Node
-	for _, node := range mon.nodes {
+	var logCtx []interface{}
+
+	for i, node := range mon.nodes {
 		err := node.UpdateLatest()
 		v, _ := node.Version()
 		if err != nil {
@@ -115,10 +117,12 @@ func (mon *NodeMonitor) doChecks() {
 			activeNodes = append(activeNodes, node)
 			node.SetStatus(NodeStatusOK)
 			num := node.HeadNum()
-			log.Info("Latest", "num", num, "node", v)
+			logCtx = append(logCtx, fmt.Sprintf("%d-num", i), num)
+			logCtx = append(logCtx, fmt.Sprintf("%d-name", i), v)
 			heads[num] = true
 		}
 	}
+	log.Info("Latest", logCtx...)
 
 	// Pair-wise, figure out the splitblocks (if any)
 	forPairs(activeNodes,
