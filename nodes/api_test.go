@@ -2,9 +2,10 @@ package nodes
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
 	"os"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 func TestInfura(t *testing.T) {
