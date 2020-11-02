@@ -38,7 +38,7 @@ type jsonrpcMessage struct {
 
 func (caller *etherscanMethodCaller) HeaderByNumber(num *big.Int) (*types.Header, error) {
 	action := "eth_getBlockByNumber"
-	tag := num.String()
+	tag := fmt.Sprintf("0x%x", num)
 	if num == nil {
 		tag = "latest"
 	}

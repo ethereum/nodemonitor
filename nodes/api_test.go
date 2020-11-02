@@ -2,6 +2,7 @@ package nodes
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"os"
 	"testing"
 )
@@ -52,4 +53,15 @@ func TestEtherscan(t *testing.T) {
 		t.Errorf("Got latest block 0")
 	}
 	t.Logf("Latest is %v", node.HeadNum())
+
+	got10 := node.HashAt(10, false)
+	want10 := common.HexToHash("0x4ff4a38b278ab49f7739d3a4ed4e12714386a9fdf72192f2e8f7da7822f10b4d")
+	if got10 != want10 {
+		want16 := common.HexToHash("0x9657beaf8542273d7448f6d277bb61aef0f700a91b238ac8b34c020f7fb8664c")
+		if got10 == want16 {
+			t.Errorf("error, base mismatch, requested block 10 but got block 16!")
+		} else {
+			t.Errorf("error: want %x, got %x", got10, want10)
+		}
+	}
 }
