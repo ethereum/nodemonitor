@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/metrics"
 	"go.uber.org/ratelimit"
 )
@@ -26,6 +27,10 @@ func NewEtherscanHeaderCall(url, apiKey string) *etherscanMethodCaller {
 
 func (caller *etherscanMethodCaller) Version() (string, error) {
 	return "Not available", nil
+}
+
+func (caller *etherscanMethodCaller) GetBadBlocks() ([]*eth.BadBlockArgs, error) {
+	return []*eth.BadBlockArgs{}, nil
 }
 
 type jsonrpcMessage struct {

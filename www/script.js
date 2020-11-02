@@ -34,7 +34,7 @@ let utils = {
     },
     etherscanLink : function(hash){
         let x = document.createElement("a");
-        x.setAttribute("href","https://etherscan.org/block/"+hash);
+        x.setAttribute("href","https://etherscan.io/block/"+hash);
         x.append("Etherscan")
         return x
     },
@@ -154,17 +154,22 @@ function onData(data){
         let version = client.Version
         let status = "OK"
         let progress = "Never"
+        let badblocks = "0"
         if (client.LastProgress > 0){
             progress = humanFriendly.timeSince(new Date(client.LastProgress*1000)) + " ago"
         }
         if (client.Status != 0) {
             status = " (unhealthy)"
         }
+        if (client.BadBlocks > 0) {
+            badblocks = client.BadBlocks
+        }
         let tRow = utils.tag("tr")
         tRow.append(utils.tag("td", name))
         tRow.append(utils.tag("td", version))
         tRow.append(utils.tag("td", status))
         tRow.append(utils.tag("td", progress))
+        tRow.append(utils.tag("td", badblocks))
         nodeB.append(tRow)
         // Add td headings
         thead.append(utils.slantedHeading(name))
@@ -201,6 +206,32 @@ function onData(data){
             }
         }
         tbody.append(row)
+    })
+
+    // Populate bad block info
+    var badblocksB = $("#badblocks tbody")
+    badblocksB.empty()
+    data.BadBlocks.forEach(function(badblock) {
+        let tRow = utils.tag("tr")
+        tRow.append(utils.tag("td", badblock.Client))
+        tRow.append(utils.tag("td", utils.shortHash(badblock.Hash)))
+        $(tRow).on('click', function(){
+            showBadBlock(badblock.Client, badblock.Hash)
+        })
+        badblocksB.append(tRow)
+    })
+}
+
+function showBadBlock(client, hash){
+    $.ajax("badblocks/"+hash+".json", {
+        dataType: "json",
+        success: function(data){
+            populateBlockInfo(data)
+        },
+        error: function(status, err){
+            populateBlockInfo({"hash": hash})
+            progress("Failed to fetch bad block: " + status.statusText + " error: " + err);
+            },
     })
 }
 

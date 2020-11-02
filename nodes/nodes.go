@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/eth"
 )
 
 const (
@@ -34,6 +35,7 @@ type Node interface {
 	BlockAt(num uint64, force bool) *blockInfo
 	HashAt(num uint64, force bool) common.Hash
 	HeadNum() uint64
+	BadBlocks() []*eth.BadBlockArgs
 }
 
 type clientJson struct {
@@ -41,22 +43,31 @@ type clientJson struct {
 	Name         string
 	Status       int
 	LastProgress int64
+	BadBlocks    int
+}
+
+type badBlockJson struct {
+	Client string
+	Hash   common.Hash
+	RLP    string `json:"-"`
 }
 
 // Report represents one 'snapshot' of the state of the nodes, where they are at
 // in a given time.
 type Report struct {
-	Cols    []*clientJson
-	Rows    map[int][]string
-	Numbers []int
-	Hashes  []common.Hash
+	Cols      []*clientJson
+	Rows      map[int][]string
+	Numbers   []int
+	Hashes    []common.Hash
+	BadBlocks []*badBlockJson
 }
 
 func NewReport(headList []int) *Report {
 	return &Report{
-		Numbers: headList,
-		Cols:    nil,
-		Rows:    make(map[int][]string),
+		Numbers:   headList,
+		Cols:      nil,
+		Rows:      make(map[int][]string),
+		BadBlocks: make([]*badBlockJson, 0),
 	}
 }
 
@@ -93,16 +104,23 @@ func (r *Report) Print() {
 }
 
 // AddToReport adds the given node to the report
-func (r *Report) AddToReport(node Node) {
+func (r *Report) AddToReport(node Node, badBlocks map[common.Hash]*badBlockJson) {
 	v, _ := node.Version()
+	// Add general node properties
 	r.Cols = append(r.Cols,
 		&clientJson{
 			Version:      v,
 			Name:         node.Name(),
 			Status:       node.Status(),
 			LastProgress: node.LastProgress(),
+			BadBlocks:    len(badBlocks),
 		},
 	)
+	// Add bad blocks
+	for _, block := range badBlocks {
+		r.BadBlocks = append(r.BadBlocks, block)
+	}
+	// Add hashes
 	for _, num := range r.Numbers {
 		row := r.Rows[num]
 		block := node.BlockAt(uint64(num), false)
