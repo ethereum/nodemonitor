@@ -78,7 +78,7 @@ func (r *Report) dedup() {
 		hashMap[h] = true
 	}
 	var hashList []common.Hash
-	for k, _ := range hashMap {
+	for k := range hashMap {
 		hashList = append(hashList, k)
 	}
 	r.Hashes = hashList

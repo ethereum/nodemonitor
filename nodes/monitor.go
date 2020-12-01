@@ -153,7 +153,7 @@ func (mon *NodeMonitor) doChecks() {
 			if splitSize < splitLength {
 				splitSize = splitLength
 			}
-			log.Info("Split found", "x", a.Name(), "y", b.Name(), "num", split)
+			log.Info("Split found", "x", a.Name(), "y", b.Name(), "num", split, "xHash", ha.hash, "yHash", hb.hash)
 			// Point of interest, add split-block and split-block-minus-one to heads
 			heads[uint64(split)] = true
 			if split > 0 {
@@ -163,7 +163,7 @@ func (mon *NodeMonitor) doChecks() {
 	)
 	metrics.GetOrRegisterGauge("chain/split", registry).Update(int64(splitSize))
 	var headList []int
-	for k, _ := range heads {
+	for k := range heads {
 		headList = append(headList, int(k))
 	}
 	sort.Sort(sort.Reverse(sort.IntSlice(headList)))
