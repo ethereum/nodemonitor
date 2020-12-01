@@ -226,6 +226,9 @@ func (node *RemoteNode) throttledGetHeader(num *big.Int) (*blockInfo, error) {
 		pHash: h.ParentHash,
 	}
 	node.chainHistory[bl.num] = bl
+	if num.Uint64() != bl.num {
+		return nil, fmt.Errorf("Remote node %v answered with wrong number, got %d, want %v", node.name, bl.num, num.Uint64())
+	}
 	return bl, nil
 }
 
