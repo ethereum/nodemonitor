@@ -38,6 +38,12 @@ let utils = {
         x.append("Etherscan")
         return x
     },
+    link: function(target){
+        let x = document.createElement("a");
+        x.setAttribute("href", target);
+        x.append(target)
+        return x
+    },
 }
 
 // little fifo to store hash->data mappings
@@ -265,7 +271,7 @@ function showVulnerability(vuln) {
 		    let ul = utils.tag("ul")
                     for(var e in value) {
                         let li = utils.tag("li")
-			li.append(utils.tag("a", value[e]))
+			li.append(utils.link(value[e]))
 			ul.append(li)
                     }
                     tbody.append(ul)
