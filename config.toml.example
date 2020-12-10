@@ -17,7 +17,7 @@ etherscan_endpoint = "https://api.etherscan.io/api"
 [[clients]]
   # The 'rpc' kind is a regular rpc-node
   kind="rpc"
-  url = "http://localhost:8546"
+  url = "http://localhost:8545"
   name = "geth"
 
 [[clients]]

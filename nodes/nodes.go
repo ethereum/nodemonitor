@@ -39,11 +39,12 @@ type Node interface {
 }
 
 type clientJson struct {
-	Version      string
-	Name         string
-	Status       int
-	LastProgress int64
-	BadBlocks    int
+	Version         string
+	Name            string
+	Status          int
+	LastProgress    int64
+	BadBlocks       int
+	Vulnerabilities []string
 }
 
 type badBlockJson struct {
@@ -104,18 +105,24 @@ func (r *Report) Print() {
 }
 
 // AddToReport adds the given node to the report
-func (r *Report) AddToReport(node Node, badBlocks map[common.Hash]*badBlockJson) {
+func (r *Report) AddToReport(node Node, badBlocks map[common.Hash]*badBlockJson, vuln []vulnJson) {
 	v, _ := node.Version()
 	// Add general node properties
-	r.Cols = append(r.Cols,
-		&clientJson{
-			Version:      v,
-			Name:         node.Name(),
-			Status:       node.Status(),
-			LastProgress: node.LastProgress(),
-			BadBlocks:    len(badBlocks),
-		},
-	)
+	np := &clientJson{
+		Version:      v,
+		Name:         node.Name(),
+		Status:       node.Status(),
+		LastProgress: node.LastProgress(),
+		BadBlocks:    len(badBlocks),
+	}
+	// Add vulnerabilites if applicable
+	if len(vuln) != 0 {
+		np.Vulnerabilities = make([]string, 0, len(vuln))
+		for _, v := range vuln {
+			np.Vulnerabilities = append(np.Vulnerabilities, v.Uid)
+		}
+	}
+	r.Cols = append(r.Cols, np)
 	// Add bad blocks
 	for _, block := range badBlocks {
 		r.BadBlocks = append(r.BadBlocks, block)

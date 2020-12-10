@@ -168,9 +168,15 @@ func (mon *NodeMonitor) doChecks() {
 	}
 	sort.Sort(sort.Reverse(sort.IntSlice(headList)))
 
+	// create a new report
 	r := NewReport(headList)
-	for i := range mon.nodes {
-		r.AddToReport(mon.nodes[i], mon.badBlocks[i])
+	for i, n := range mon.nodes {
+		// check vulnerability reports
+		vuln, err := checkNode(n)
+		if err != nil {
+			log.Info("Error while checking for vulnerabilities", "error", err)
+		}
+		r.AddToReport(n, mon.badBlocks[i], vuln)
 	}
 	// Add bad blocks every minute
 	if time.Since(mon.lastBadBlocks) > time.Minute {
@@ -201,6 +207,7 @@ func (mon *NodeMonitor) doChecks() {
 	}
 	mon.provideHashes(r)
 	mon.provideBadBlocks()
+	mon.provideVulns()
 }
 
 func (mon *NodeMonitor) provideHashes(r *Report) {
@@ -216,7 +223,7 @@ func (mon *NodeMonitor) provideHashes(r *Report) {
 		if _, err := os.Stat(fname); os.IsNotExist(err) {
 			data, err := json.MarshalIndent(hdr, "", " ")
 			if err != nil {
-				log.Warn("Failed to marshall header", "error", err)
+				log.Warn("Failed to marshal header", "error", err)
 				continue
 			}
 			if err := ioutil.WriteFile(fname, data, 0777); err != nil {
@@ -228,6 +235,24 @@ func (mon *NodeMonitor) provideHashes(r *Report) {
 	if time.Since(mon.lastClean) > time.Minute*10 {
 		cleanHashes("www/hashes/", r.Hashes)
 		mon.lastClean = time.Now()
+	}
+}
+
+func (mon *NodeMonitor) provideVulns() {
+	for _, v := range checkCache {
+		fname := fmt.Sprintf("www/vulns/%v.json", v.Uid)
+		// only write it if it isn't already there
+		if _, err := os.Stat(fname); os.IsNotExist(err) {
+			data, err := json.MarshalIndent(v, "", " ")
+			if err != nil {
+				log.Warn("Failed to marshal vulnerability", "error", err)
+				continue
+			}
+			if err := ioutil.WriteFile(fname, data, 0777); err != nil {
+				log.Warn("Failed to write file", "error", err)
+				return
+			}
+		}
 	}
 }
 

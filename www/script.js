@@ -170,6 +170,18 @@ function onData(data){
         tRow.append(utils.tag("td", status))
         tRow.append(utils.tag("td", progress))
         tRow.append(utils.tag("td", badblocks))
+        if (client.Vulnerabilities) {
+            let s = utils.tag("tr");
+            client.Vulnerabilities.forEach(element => {
+                let bt = utils.tag("td", "⚠")
+                $(bt).on('click', function(){showVulnerability(element)})
+                s.append(bt)
+            });
+            tRow.append(s)
+        } else {
+            tRow.append(utils.tag("td", ""))
+        }
+        
         nodeB.append(tRow)
         // Add td headings
         thead.append(utils.slantedHeading(name))
@@ -235,7 +247,46 @@ function showBadBlock(client, hash){
     })
 }
 
+function showVulnerability(vuln) {
+    $.ajax("vulns/"+vuln+".json", {
+        dataType: "json",
+        success: function(data){
+            let mhead = $(".modal-header")
+            mhead.empty()
+            console.log(data)
+            mhead.append(data.Severity +" : " + data.Name)
 
+            let tbody = $(".modal-body")
+            tbody.empty()
+            for (let [key, value] of Object.entries(data)) {
+                if (key == 'Name' || key == 'Check') {
+                    continue
+                }
+                let row = utils.tag("tr")
+                row.append(utils.tag("td", key))
+                if (key == 'Links') {
+                    let v = utils.tag("td", "")
+                    for(var e in value) {
+                        let h = utils.tag("a", value[e])
+                        v.append(h)
+                        v.append(utils.tag("br"))
+                    }
+                    row.append(v)
+                } else {
+                    let v = utils.tag("td", value)
+                    row.append(v)
+                }                
+                tbody.append(row)
+            }
+            $("#myModal").modal()
+        },
+        error: function(status, err){
+            $(".modal-body").html("Asdf");
+            $("#myModal").modal()
+            progress("Failed to fetch vulnerability: " + status.statusText + " error: " + err);
+        },
+    })
+}
 
 // populateBlockInfo redraws the Block Info section with the given data
 function populateBlockInfo(data){
