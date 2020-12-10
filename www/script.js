@@ -251,32 +251,33 @@ function showVulnerability(vuln) {
     $.ajax("vulns/"+vuln+".json", {
         dataType: "json",
         success: function(data){
-            let mhead = $(".modal-header")
+            let mhead = $(".modal-title")
             mhead.empty()
-            console.log(data)
-            mhead.append(data.Severity +" : " + data.Name)
-
+            //console.log(data)
+            mhead.append(data.Severity +" : " + data.Name + " ( " + data.Uid+" )")
             let tbody = $(".modal-body")
             tbody.empty()
             for (let [key, value] of Object.entries(data)) {
-                if (key == 'Name' || key == 'Check') {
+                if (key == 'Name' || key == 'Check' || key == "Uid") {
                     continue
                 }
-                let row = utils.tag("tr")
-                row.append(utils.tag("td", key))
                 if (key == 'Links') {
-                    let v = utils.tag("td", "")
+		    let ul = utils.tag("ul")
                     for(var e in value) {
-                        let h = utils.tag("a", value[e])
-                        v.append(h)
-                        v.append(utils.tag("br"))
+                        let li = utils.tag("li")
+			li.append(utils.tag("a", value[e]))
+			ul.append(li)
                     }
-                    row.append(v)
-                } else {
-                    let v = utils.tag("td", value)
-                    row.append(v)
-                }                
-                tbody.append(row)
+                    tbody.append(ul)
+		}else if (key == "Summary" || key == "Description"){
+			tbody.append(utils.tag("strong", key))
+			tbody.append(utils.tag("p", value))
+		}else{
+			let p = utils.tag("p")
+			p.append(utils.tag("strong", key+" : "))
+			p.append(utils.tag("span", value))
+			tbody.append(p)
+		}
             }
             $("#myModal").modal()
         },
