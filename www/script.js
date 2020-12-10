@@ -38,6 +38,12 @@ let utils = {
         x.append("Etherscan")
         return x
     },
+    link: function(target){
+        let x = document.createElement("a");
+        x.setAttribute("href", target);
+        x.append(target)
+        return x
+    },
 }
 
 // little fifo to store hash->data mappings
@@ -170,6 +176,22 @@ function onData(data){
         tRow.append(utils.tag("td", status))
         tRow.append(utils.tag("td", progress))
         tRow.append(utils.tag("td", badblocks))
+        if (client.Vulnerabilities) {
+            let s = utils.tag("tr");
+            client.Vulnerabilities.forEach(element => {
+		let warn = utils.tag("span","")
+		warn.classList.add("glyphicon")
+		warn.classList.add("glyphicon-warning-sign")
+                let bt = utils.tag("td")
+		bt.append(warn)
+                $(bt).on('click', function(){showVulnerability(element)})
+                s.append(bt)
+            });
+            tRow.append(s)
+        } else {
+            tRow.append(utils.tag("td", ""))
+        }
+        
         nodeB.append(tRow)
         // Add td headings
         thead.append(utils.slantedHeading(name))
@@ -235,7 +257,47 @@ function showBadBlock(client, hash){
     })
 }
 
-
+function showVulnerability(vuln) {
+    $.ajax("vulns/"+vuln+".json", {
+        dataType: "json",
+        success: function(data){
+            let mhead = $(".modal-title")
+            mhead.empty()
+            //console.log(data)
+            mhead.append(data.Severity +" : " + data.Name + " ( " + data.Uid+" )")
+            let tbody = $(".modal-body")
+            tbody.empty()
+            for (let [key, value] of Object.entries(data)) {
+                if (key == 'Name' || key == 'Check' || key == "Uid") {
+                    continue
+                }
+                if (key == 'Links') {
+		    let ul = utils.tag("ul")
+                    for(var e in value) {
+                        let li = utils.tag("li")
+			li.append(utils.link(value[e]))
+			ul.append(li)
+                    }
+                    tbody.append(ul)
+		}else if (key == "Summary" || key == "Description"){
+			tbody.append(utils.tag("strong", key))
+			tbody.append(utils.tag("p", value))
+		}else{
+			let p = utils.tag("p")
+			p.append(utils.tag("strong", key+" : "))
+			p.append(utils.tag("span", value))
+			tbody.append(p)
+		}
+            }
+            $("#myModal").modal()
+        },
+        error: function(status, err){
+            $(".modal-body").html("Asdf");
+            $("#myModal").modal()
+            progress("Failed to fetch vulnerability: " + status.statusText + " error: " + err);
+        },
+    })
+}
 
 // populateBlockInfo redraws the Block Info section with the given data
 function populateBlockInfo(data){
