@@ -179,7 +179,11 @@ function onData(data){
         if (client.Vulnerabilities) {
             let s = utils.tag("tr");
             client.Vulnerabilities.forEach(element => {
-                let bt = utils.tag("td", "⚠")
+		let warn = utils.tag("span","")
+		warn.classList.add("glyphicon")
+		warn.classList.add("glyphicon-warning-sign")
+                let bt = utils.tag("td")
+		bt.append(warn)
                 $(bt).on('click', function(){showVulnerability(element)})
                 s.append(bt)
             });
