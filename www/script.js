@@ -161,6 +161,7 @@ function onData(data){
         let status = "OK"
         let progress = "Never"
         let badblocks = "0"
+        let vulnerabilites = client.Vulnerabilities || []
         if (client.LastProgress > 0){
             progress = humanFriendly.timeSince(new Date(client.LastProgress*1000)) + " ago"
         }
@@ -176,21 +177,14 @@ function onData(data){
         tRow.append(utils.tag("td", status))
         tRow.append(utils.tag("td", progress))
         tRow.append(utils.tag("td", badblocks))
-        if (client.Vulnerabilities) {
-            let s = utils.tag("tr");
-            client.Vulnerabilities.forEach(element => {
-		let warn = utils.tag("span","")
-		warn.classList.add("glyphicon")
-		warn.classList.add("glyphicon-warning-sign")
-                let bt = utils.tag("td")
-		bt.append(warn)
-                $(bt).on('click', function(){showVulnerability(element)})
-                s.append(bt)
-            });
-            tRow.append(s)
-        } else {
-            tRow.append(utils.tag("td", ""))
-        }
+        let vulnTd = utils.tag("td");
+        vulnerabilites.forEach(element => {
+            let warn = utils.tag("span","", "glyphicon")
+            warn.classList.add("glyphicon-warning-sign")
+            vulnTd.append(warn)
+            $(warn).on('click', function(){showVulnerability(element)})
+        });
+        tRow.append(vulnTd)
         
         nodeB.append(tRow)
         // Add td headings
@@ -261,10 +255,8 @@ function showVulnerability(vuln) {
     $.ajax("vulns/"+vuln+".json", {
         dataType: "json",
         success: function(data){
-            let mhead = $(".modal-title")
-            mhead.empty()
-            //console.log(data)
-            mhead.append(data.Severity +" : " + data.Name + " ( " + data.Uid+" )")
+
+            $(".modal-title").text(data.Severity +" : " + data.Name + " ( " + data.Uid+" )")
             let tbody = $(".modal-body")
             tbody.empty()
             for (let [key, value] of Object.entries(data)) {
@@ -272,29 +264,31 @@ function showVulnerability(vuln) {
                     continue
                 }
                 if (key == 'Links') {
-		    let ul = utils.tag("ul")
-                    for(var e in value) {
+                    let ul = utils.tag("ul")
+                    value.forEach(function(target){
                         let li = utils.tag("li")
-			li.append(utils.link(value[e]))
-			ul.append(li)
-                    }
+                        li.append(utils.link(target))
+                        ul.append(li)
+
+                    })
                     tbody.append(ul)
-		}else if (key == "Summary" || key == "Description"){
-			tbody.append(utils.tag("strong", key))
-			tbody.append(utils.tag("p", value))
-		}else{
-			let p = utils.tag("p")
-			p.append(utils.tag("strong", key+" : "))
-			p.append(utils.tag("span", value))
-			tbody.append(p)
-		}
+                }else if (key == "Summary" || key == "Description"){
+                    tbody.append(utils.tag("strong", key))
+                    tbody.append(utils.tag("p", value))
+                }else{
+                    let p = utils.tag("p")
+                    p.append(utils.tag("strong", key+" : "))
+                    p.append(utils.tag("span", value))
+                    tbody.append(p)
+                }
             }
             $("#myModal").modal()
         },
         error: function(status, err){
-            $(".modal-body").html("Asdf");
+            let msg = "Failed to fetch vulnerability: " + status.statusText + " error: " + err
+            $(".modal-body").text(msg);
             $("#myModal").modal()
-            progress("Failed to fetch vulnerability: " + status.statusText + " error: " + err);
+            progress(msg);
         },
     })
 }
