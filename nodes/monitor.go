@@ -107,21 +107,36 @@ func (mon *NodeMonitor) doChecks() {
 	var activeNodes []Node
 	var logCtx []interface{}
 
-	for i, node := range mon.nodes {
-		err := node.UpdateLatest()
-		v, _ := node.Version()
-		if err != nil {
-			log.Error("Error getting latest", "node", v, "error", err)
-			node.SetStatus(NodeStatusUnreachable)
-		} else {
-			activeNodes = append(activeNodes, node)
+	doneCh := make(chan Node)
+	for _, node := range mon.nodes {
+		go func(node Node) {
+			defer func() {
+				doneCh <- node
+			}()
+			err := node.UpdateLatest()
+			v, _ := node.Version()
+			if err != nil {
+				log.Error("Error getting latest", "node", v, "error", err)
+				node.SetStatus(NodeStatusUnreachable)
+				return
+			}
 			node.SetStatus(NodeStatusOK)
-			num := node.HeadNum()
-			logCtx = append(logCtx, fmt.Sprintf("%d-num", i), num)
-			logCtx = append(logCtx, fmt.Sprintf("%d-name", i), v)
-			heads[num] = true
-		}
+		}(node)
 	}
+	// Wait for them to report back
+	for i := 0; i < len(mon.nodes); i++ {
+		node := <-doneCh
+		if node.Status() == NodeStatusUnreachable {
+			continue
+		}
+		activeNodes = append(activeNodes, node)
+		num := node.HeadNum()
+		ver, _ := node.Version()
+		heads[num] = true
+		logCtx = append(logCtx, fmt.Sprintf("%d-num", i), num)
+		logCtx = append(logCtx, fmt.Sprintf("%d-name", i), ver)
+	}
+
 	log.Info("Latest", logCtx...)
 
 	// Pair-wise, figure out the splitblocks (if any)
