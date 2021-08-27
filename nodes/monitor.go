@@ -37,6 +37,7 @@ type NodeMonitor struct {
 func NewMonitor(nodes []Node, db *blockDB, reload time.Duration) (*NodeMonitor, error) {
 	// Do initial healthcheck
 	for _, node := range nodes {
+		log.Info("Checking health", "node", node.Name())
 		v, err := node.Version()
 		if err != nil {
 			node.SetStatus(NodeStatusUnreachable)
