@@ -38,18 +38,21 @@ func NewRPCHeaderCall(rpcCli *rpc.Client, ethCli *ethclient.Client) *JSONRPCMeth
 func (caller *JSONRPCMethodCaller) Version() (string, error) {
 	method := "web3_clientVersion"
 	var ver string
-	err := caller.rpcCli.CallContext(context.Background(), &ver, method)
+	ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
+	err := caller.rpcCli.CallContext(ctx, &ver, method)
 	return ver, err
 }
 
 func (caller *JSONRPCMethodCaller) HeaderByNumber(num *big.Int) (*types.Header, error) {
-	return caller.ethCli.HeaderByNumber(context.Background(), num)
+	ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
+	return caller.ethCli.HeaderByNumber(ctx, num)
 }
 
 func (caller *JSONRPCMethodCaller) GetBadBlocks() ([]*eth.BadBlockArgs, error) {
 	method := "debug_getBadBlocks"
 	var blocks []*eth.BadBlockArgs
-	err := caller.rpcCli.CallContext(context.Background(), &blocks, method)
+	ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
+	err := caller.rpcCli.CallContext(ctx, &blocks, method)
 	// TODO check if error is method not available
 	return blocks, err
 }
