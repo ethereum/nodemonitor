@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -68,7 +69,7 @@ type RemoteNode struct {
 	// backend to store hash -> header into
 	db     *blockDB
 	status int
-
+	mu sync.RWMutex
 	lastProgress int64 // Last unix-time the node progressed the chain
 
 	headGauge metrics.Gauge
@@ -155,15 +156,21 @@ func NewAlchemyNode(name, apiKey, endpoint string, db *blockDB, rateLimit int) (
 }
 
 func (node *RemoteNode) SetStatus(status int) {
+	node.mu.Lock()
+	defer node.mu.Unlock()
 	node.status = status
 }
 
 func (node *RemoteNode) Status() int {
+	node.mu.RLock()
+	defer node.mu.RUnlock()
 	return node.status
 }
 
 func (node *RemoteNode) Version() (string, error) {
 	method := "web3_clientVersion"
+	node.mu.Lock()
+	defer node.mu.Unlock()
 	// Don't request version more than once every 30 seconds
 	if time.Since(node.lastCheck[method]) < time.Second*30 {
 		return node.version, nil
@@ -179,6 +186,8 @@ func (node *RemoteNode) Version() (string, error) {
 }
 
 func (node *RemoteNode) HeadNum() uint64 {
+	node.mu.RLock()
+	defer node.mu.RUnlock()
 	if node.latest != nil {
 		return node.latest.num
 	}
@@ -186,14 +195,21 @@ func (node *RemoteNode) HeadNum() uint64 {
 }
 
 func (node *RemoteNode) Name() string {
+	node.mu.RLock()
+	defer node.mu.RUnlock()
 	return node.name
 }
 
 func (node *RemoteNode) LastProgress() int64 {
+	node.mu.RLock()
+	defer node.mu.RUnlock()
 	return node.lastProgress
 }
 
 func (node *RemoteNode) UpdateLatest() error {
+	node.mu.Lock()
+	defer node.mu.Unlock()
+
 	bl, err := node.fetchHeader(nil)
 	if err != nil {
 		return err
@@ -265,6 +281,9 @@ func (node *RemoteNode) fetchHeader(num *big.Int) (*blockInfo, error) {
 }
 
 func (node *RemoteNode) BlockAt(num uint64, force bool) *blockInfo {
+	node.mu.Lock()
+	defer node.mu.Unlock()
+
 	if node.latest != nil && node.latest.num < num {
 		return nil // that block is future, don't bother
 	}
@@ -285,6 +304,9 @@ func (node *RemoteNode) HashAt(num uint64, force bool) common.Hash {
 }
 
 func (node *RemoteNode) BadBlocks() []*eth.BadBlockArgs {
+	node.mu.Lock()
+	defer node.mu.Unlock()
+
 	args, err := node.GetBadBlocks()
 	if err != nil {
 		return []*eth.BadBlockArgs{}

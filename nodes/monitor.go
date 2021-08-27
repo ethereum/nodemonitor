@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"sync"
 	"time"
@@ -141,8 +142,10 @@ func (mon *NodeMonitor) doChecks() {
 	log.Info("Latest", logCtx...)
 
 	// Pair-wise, figure out the splitblocks (if any)
+	var headMu sync.Mutex
 	forPairs(activeNodes,
 		func(a, b Node) {
+			log.Info("Cross-checking", "a", a.Name(), "b", b.Name())
 			highest := a.HeadNum()
 			if b.HeadNum() < highest {
 				highest = b.HeadNum()
@@ -171,6 +174,8 @@ func (mon *NodeMonitor) doChecks() {
 			}
 			log.Info("Split found", "x", a.Name(), "y", b.Name(), "num", split, "xHash", ha.hash, "yHash", hb.hash)
 			// Point of interest, add split-block and split-block-minus-one to heads
+			headMu.Lock()
+			defer headMu.Unlock()
 			heads[uint64(split)] = true
 			if split > 0 {
 				heads[uint64(split-1)] = true
@@ -384,11 +389,25 @@ func findSplit(num int, a Node, b Node) int {
 
 // calls 'fn(a, b)' once for each pair in the given list of 'elems'
 func forPairs(elems []Node, fn func(a, b Node)) {
+
+	pairs := make(chan [2]Node)
+	var wg sync.WaitGroup
+	for i := 0; i < runtime.NumCPU(); i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for pair := range pairs {
+				fn(pair[0], pair[1])
+			}
+		}()
+	}
 	for i := 0; i < len(elems); i++ {
 		for j := i + 1; j < len(elems); j++ {
-			fn(elems[i], elems[j])
+			pairs <- [2]Node{elems[i], elems[j]}
 		}
 	}
+	close(pairs)
+	wg.Wait()
 }
 
 type blockDB struct {
