@@ -13,6 +13,8 @@ const url = "https://geth.ethereum.org/docs/vulnerabilities/vulnerabilities.json
 var (
 	checkCache      []vulnJson
 	lastCheckUpdate time.Time
+	// for testing
+	disableVulnCheck bool
 )
 
 type vulnJson struct {
@@ -32,9 +34,11 @@ type vulnJson struct {
 }
 
 func fetchChecks(url string) ([]vulnJson, error) {
-
+	if disableVulnCheck {
+		return nil, nil
+	}
 	client := http.Client{
-		Timeout: time.Second * 2, // Timeout after 2 seconds
+		Timeout: time.Second * 1, // Timeout after 1 seconds
 	}
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)

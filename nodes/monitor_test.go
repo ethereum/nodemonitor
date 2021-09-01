@@ -1,9 +1,11 @@
 package nodes
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,8 +17,21 @@ import (
 
 type testNode struct {
 	id    string
-	chain []*blockInfo
+	forks []uint64
+	seeds []int
 	head  int // points to where we're currently at, in the chain
+	mu    sync.Mutex
+	// Counters
+	queriedNumbers map[uint64]interface{}
+	totalQueries   int
+}
+
+func hashFromSeed(seed int, number uint64) common.Hash {
+	hash := make([]byte, 32)
+	binary.BigEndian.PutUint64(hash, uint64(seed))
+	binary.BigEndian.PutUint64(hash[8:], uint64(number))
+	return crypto.Keccak256Hash(hash)
+	//return common.BytesToHash(hash)
 }
 
 type brokenNode struct {
@@ -61,22 +76,35 @@ func (b brokenNode) BadBlocks() []*eth.BadBlockArgs {
 	return []*eth.BadBlockArgs{}
 }
 
-func newTestNode(id string, head int, chain []*blockInfo) *testNode {
+func newTestNode(id string, head int, forks []uint64, seeds []int) *testNode {
 	return &testNode{
-		id,
-		chain,
-		head,
+		id:             id,
+		forks:          forks,
+		seeds:          seeds,
+		head:           head,
+		queriedNumbers: make(map[uint64]interface{}),
 	}
 }
 
+func (t *testNode) seedAt(number uint64) int {
+	// Search uses binary search to find and return the smallest index i
+	// in [0, n) at which f(i) is true
+	seed := t.seeds[0]
+	for i, fork := range t.forks {
+		if fork <= number {
+			seed = t.seeds[i]
+		}
+	}
+	return seed
+}
+
 func (t *testNode) Status() int {
-	return 1
+	return 0
 }
 
 func (t *testNode) SetStatus(int) {}
 
 func (t *testNode) Version() (string, error) {
-
 	return "TestNode/v0.1/darwin/go1.4.1", nil
 }
 
@@ -89,11 +117,21 @@ func (t *testNode) UpdateLatest() error {
 }
 
 func (t *testNode) BlockAt(num uint64, force bool) *blockInfo {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	if num > uint64(t.head) {
 		return nil
 	}
-	log.Trace("BlockAt", "node", t.id, "query", num)
-	return t.chain[num]
+	t.queriedNumbers[num] = num
+	t.totalQueries++
+
+	hash := hashFromSeed(t.seedAt(num), num)
+	//log.Info("BlockAt", "node", t.id, "query", num, "hash", hash, "seed", t.seedAt(num))
+	return &blockInfo{
+		num:   num,
+		hash:  hash,
+		pHash: hashFromSeed(t.seedAt(num-1), num-1),
+	}
 }
 
 func (t *testNode) HashAt(num uint64, force bool) common.Hash {
@@ -119,53 +157,44 @@ func TestMonitor(t *testing.T) {
 	log.Root().SetHandler(log.LvlFilterHandler(
 		log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 
-	//generate a base chain
-	var a = make([]*blockInfo, 3000)
-	var b = make([]*blockInfo, 3000)
-	var c = make([]*blockInfo, 3000)
-
-	for i := 0; i < len(a); i++ {
-		h := common.BytesToHash(crypto.Keccak256([]byte(fmt.Sprintf("a :%d", i))))
-		bl := &blockInfo{
-			num:  uint64(i),
-			hash: h,
-		}
-		a[i] = bl
-	}
-	// Another chain splits of at block 1000
-	copy(b, a)
-	for i := 1000; i < len(b); i++ {
-		h := common.BytesToHash(crypto.Keccak256([]byte(fmt.Sprintf("b :%d", i))))
-		bl := &blockInfo{
-			num:  uint64(i),
-			hash: h,
-		}
-		b[i] = bl
-	}
-
-	// Third chain splits from B at block 1500
-	copy(c, b)
-	for i := 1500; i < len(c); i++ {
-		h := common.BytesToHash(crypto.Keccak256([]byte(fmt.Sprintf("c :%d", i))))
-		bl := &blockInfo{
-			num:  uint64(i),
-			hash: h,
-		}
-		c[i] = bl
-	}
+	// Disable the vuln check for tests
+	disableVulnCheck = true
 
 	// spin up three nodes
 	var nodes []Node
-	nodes = append(nodes, newTestNode("node-a", 2704, a))
-	nodes = append(nodes, newTestNode("node-b", 2800, b))
-	nodes = append(nodes, newTestNode("node-c", 2202, c))
-	// D is same as A, but two blocks behind
-	nodes = append(nodes, newTestNode("node-d", 2702, a))
 
+	// 10 nodes are in agreement
+	nodes = append(nodes, newTestNode("canon-a", 13_000_000, []uint64{0}, []int{0}))
+	nodes = append(nodes, newTestNode("canon-b", 13_000_000, []uint64{0}, []int{0}))
+	nodes = append(nodes, newTestNode("canon-c", 13_000_000, []uint64{0}, []int{0}))
+	nodes = append(nodes, newTestNode("canon-d", 13_000_000, []uint64{0}, []int{0}))
+	nodes = append(nodes, newTestNode("canon-e", 13_000_000, []uint64{0}, []int{0}))
+	nodes = append(nodes, newTestNode("canon-f", 13_000_000, []uint64{0}, []int{0}))
+	nodes = append(nodes, newTestNode("canon-g", 13_000_000, []uint64{0}, []int{0}))
+	nodes = append(nodes, newTestNode("canon-h", 13_000_000, []uint64{0}, []int{0}))
+	nodes = append(nodes, newTestNode("canon-i", 13_000_000, []uint64{0}, []int{0}))
+	nodes = append(nodes, newTestNode("canon-j", 13_000_000, []uint64{0}, []int{0}))
+
+	// Three nodes forked off 200 blocks earlier, and are 100 blocks behind too
+	nodes = append(nodes, newTestNode("fork-a", 12_999_900, []uint64{0, 12_999_800}, []int{0, 1}))
+	nodes = append(nodes, newTestNode("fork-b", 12_999_900, []uint64{0, 12_999_800}, []int{0, 1}))
+	nodes = append(nodes, newTestNode("fork-c", 12_999_900, []uint64{0, 12_999_800}, []int{0, 1}))
+
+	// And one got stuck on a hardfork, it progressed only two blocks
+	nodes = append(nodes, newTestNode("old-a", 12_800_000, []uint64{0, 12_799_998}, []int{0, 2}))
+	// Two nodes are br0ken
 	nodes = append(nodes, &brokenNode{"broken-a"})
 	nodes = append(nodes, &brokenNode{"broken-b"})
-	nodes = append(nodes, &brokenNode{"broken-c"})
 
-	mon, _ := NewMonitor(nodes, nil, time.Second)
-	mon.doChecks()
+	NewMonitor(nodes, nil, time.Second)
+	queries := 0
+	for _, node := range nodes {
+		tn, ok := node.(*testNode)
+		if ok {
+			t.Logf("%v was queried for %d blocks, totalling %d queries", tn.Name(),
+				len(tn.queriedNumbers), tn.totalQueries)
+			queries += len(tn.queriedNumbers)
+		}
+	}
+	t.Logf("Total %d unique block queries!", queries)
 }
