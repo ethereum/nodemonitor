@@ -67,9 +67,9 @@ type RemoteNode struct {
 	latest       *blockInfo
 	chainHistory map[uint64]*blockInfo
 	// backend to store hash -> header into
-	db     *blockDB
-	status int
-	mu sync.RWMutex
+	db           *blockDB
+	status       int
+	mu           sync.RWMutex
 	lastProgress int64 // Last unix-time the node progressed the chain
 
 	headGauge metrics.Gauge

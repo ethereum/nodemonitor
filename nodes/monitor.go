@@ -92,24 +92,7 @@ func (mon *NodeMonitor) loop() {
 }
 
 func (mon *NodeMonitor) doChecks() {
-
-	// splitSize is the max amount of blocks in any chain not accepted by all nodes.
-	// If one node is simply 'behind' that does not count, since it has yet
-	// to accept the canon chain
-	var splitSize int64
-	// We want to cross-check all 'latest' numbers. So if we have
-	// node 1: x,
-	// node 2: y,
-	// node 3: z,
-	// Then we want to check the following
-	// node 1: (y, z)
-	// node 2: (x, z),
-	// node 3: (x, y),
-	// To figure out if they are on the same chain, or have diverged
-
-	var heads = make(map[uint64]bool)
 	var activeNodes []Node
-	var logCtx []interface{}
 
 	doneCh := make(chan Node)
 	for _, node := range mon.nodes {
@@ -134,57 +117,14 @@ func (mon *NodeMonitor) doChecks() {
 			continue
 		}
 		activeNodes = append(activeNodes, node)
-		num := node.HeadNum()
-		ver, _ := node.Version()
-		heads[num] = true
-		logCtx = append(logCtx, fmt.Sprintf("%d-num", i), num)
-		logCtx = append(logCtx, fmt.Sprintf("%d-name", i), ver)
 	}
-
-	log.Info("Latest", logCtx...)
+	// Sort the activeNodes by name
+	sort.Slice(activeNodes, func(i, j int) bool {
+		return activeNodes[i].Name() < activeNodes[j].Name()
+	})
 
 	// Pair-wise, figure out the splitblocks (if any)
-	var headMu sync.Mutex
-	forPairs(activeNodes,
-		func(a, b Node) {
-			log.Info("Cross-checking", "a", a.Name(), "b", b.Name())
-			highest := a.HeadNum()
-			if b.HeadNum() < highest {
-				highest = b.HeadNum()
-			}
-			// At the number where both nodes have blocks, check if the two
-			// blocks are identical
-			ha := a.BlockAt(highest, false)
-			if ha == nil {
-				// Yeah this actually _does_ happen, see https://github.com/NethermindEth/nethermind/issues/2306
-				log.Error("Node seems to be missing blocks", "name", a.Name(), "number", highest)
-				return
-			}
-			hb := b.BlockAt(highest, false)
-			if hb == nil {
-				log.Error("Node seems to be missing blocks", "name", b.Name(), "number", highest)
-				return
-			}
-			if ha.hash == hb.hash {
-				return
-			}
-			// They appear to have diverged
-			split := findSplit(int(highest), a, b)
-			splitLength := int64(int(highest) - split)
-			if splitSize < splitLength {
-				splitSize = splitLength
-			}
-			log.Info("Split found", "x", a.Name(), "y", b.Name(), "num", split, "xHash", ha.hash, "yHash", hb.hash)
-			// Point of interest, add split-block and split-block-minus-one to heads
-			headMu.Lock()
-			defer headMu.Unlock()
-			heads[uint64(split)] = true
-			if split > 0 {
-				heads[uint64(split-1)] = true
-			}
-		},
-	)
-	metrics.GetOrRegisterGauge("chain/split", registry).Update(int64(splitSize))
+	heads := mon.findSplits(activeNodes)
 	var headList []int
 	for k := range heads {
 		headList = append(headList, int(k))
@@ -230,6 +170,85 @@ func (mon *NodeMonitor) doChecks() {
 	mon.provideHashes(r)
 	mon.provideBadBlocks()
 	mon.provideVulns()
+}
+
+func (mon *NodeMonitor) findSplits(activeNodes []Node) map[uint64]bool {
+
+	var heads = make(map[uint64]bool)
+	var cache = make(map[common.Hash]int)
+	var logCtx []interface{}
+
+	var distinctNodes []Node
+
+	for i, node := range activeNodes {
+		block := node.BlockAt(node.HeadNum(), false)
+		ver, _ := node.Version()
+		heads[block.num] = true
+		if _, ok := cache[block.hash]; !ok {
+			cache[block.hash] = i
+			distinctNodes = append(distinctNodes, node)
+		}
+
+		logCtx = append(logCtx, fmt.Sprintf("%d-num", i), block.num)
+		logCtx = append(logCtx, fmt.Sprintf("%d-name", i), ver)
+	}
+	log.Info("Latest", logCtx...)
+
+	// splitSize is the max amount of blocks in any chain not accepted by all nodes.
+	// If one node is simply 'behind' that does not count, since it has yet
+	// to accept the canon chain
+	var splitSize int64
+	// We want to cross-check all 'latest' numbers. So if we have
+	// node 1: x,
+	// node 2: y,
+	// node 3: z,
+	// Then we want to check the following
+	// node 1: (y, z)
+	// node 2: (x, z),
+	// node 3: (x, y),
+	// To figure out if they are on the same chain, or have diverged
+	var headMu sync.Mutex
+	forPairs(distinctNodes,
+		func(a, b Node) {
+			log.Info("Cross-checking", "a", a.Name(), "b", b.Name())
+			highest := a.HeadNum()
+			if b.HeadNum() < highest {
+				highest = b.HeadNum()
+			}
+			// At the number where both nodes have blocks, check if the two
+			// blocks are identical
+			ha := a.BlockAt(highest, false)
+			if ha == nil {
+				// Yeah this actually _does_ happen, see https://github.com/NethermindEth/nethermind/issues/2306
+				log.Error("Node seems to be missing blocks", "name", a.Name(), "number", highest)
+				return
+			}
+			hb := b.BlockAt(highest, false)
+			if hb == nil {
+				log.Error("Node seems to be missing blocks", "name", b.Name(), "number", highest)
+				return
+			}
+			if ha.hash == hb.hash {
+				return
+			}
+			// They appear to have diverged
+			split := findSplit(int(highest), a, b)
+			splitLength := int64(int(highest) - split)
+			if splitSize < splitLength {
+				splitSize = splitLength
+			}
+			log.Info("Split found", "x", a.Name(), "y", b.Name(), "num", split, "xHash", ha.hash, "yHash", hb.hash)
+			// Point of interest, add split-block and split-block-minus-one to heads
+			headMu.Lock()
+			defer headMu.Unlock()
+			heads[uint64(split)] = true
+			if split > 0 {
+				heads[uint64(split-1)] = true
+			}
+		},
+	)
+	metrics.GetOrRegisterGauge("chain/split", registry).Update(int64(splitSize))
+	return heads
 }
 
 func (mon *NodeMonitor) provideHashes(r *Report) {
