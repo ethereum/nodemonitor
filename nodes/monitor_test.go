@@ -155,7 +155,7 @@ func (t *testNode) BadBlocks() []*eth.BadBlockArgs {
 
 func TestMonitor(t *testing.T) {
 	log.Root().SetHandler(log.LvlFilterHandler(
-		log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+		log.LvlCrit, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 
 	// Disable the vuln check for tests
 	disableVulnCheck = true
@@ -186,15 +186,52 @@ func TestMonitor(t *testing.T) {
 	nodes = append(nodes, &brokenNode{"broken-a"})
 	nodes = append(nodes, &brokenNode{"broken-b"})
 
-	NewMonitor(nodes, nil, time.Second)
-	queries := 0
+	nm, err := NewMonitor(nodes, nil, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if nm.lastReport == nil {
+		t.Fatalf("missing report")
+	}
+	// Check the 'interesting numbers'. We expect the following:
+	// heads: 13M, 12_999_900, 12_800_000
+	// forks: 12_999_800, 12_799_998
+	// fork parents:12999799, 12_799_998
+	if have, want := len(nm.lastReport.Numbers), 7; have != want {
+		nm.lastReport.Print()
+		t.Fatalf("wrong numbers, want %d, have %d", want, have)
+	}
+	var countQueries = func() int {
+		queries := 0
+		for _, node := range nodes {
+			tn, ok := node.(*testNode)
+			if ok {
+				//t.Logf("%v was queried for %d blocks, totalling %d queries", tn.Name(),
+				//	len(tn.queriedNumbers), tn.totalQueries)
+				queries += len(tn.queriedNumbers)
+			}
+		}
+		return queries
+	}
+	q1 := countQueries()
+	t.Logf("Initial check: %d unique block queries", q1)
+	// Now test the same again, without any progression of the nodess
+	nm.doChecks()
+	q2 := countQueries() - q1
+	t.Logf("Follow-up check: %d unique block queries", q2)
+	if q2 != 0 {
+		t.Fatalf("expected zero queries on follow-up, got %d", q2)
+	}
+	// Progress all nodes 2 blocks
 	for _, node := range nodes {
 		tn, ok := node.(*testNode)
 		if ok {
-			t.Logf("%v was queried for %d blocks, totalling %d queries", tn.Name(),
-				len(tn.queriedNumbers), tn.totalQueries)
-			queries += len(tn.queriedNumbers)
+			tn.head += 2
 		}
 	}
-	t.Logf("Total %d unique block queries!", queries)
+	// Now test the same again, after block progression
+	nm.doChecks()
+	q3 := countQueries() - q1 - q2
+	t.Logf("Follow-up check after block progression: %d unique block queries", q3)
+
 }

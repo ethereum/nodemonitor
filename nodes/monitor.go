@@ -32,6 +32,8 @@ type NodeMonitor struct {
 	reloadInterval time.Duration
 	lastClean      time.Time
 	lastBadBlocks  time.Time
+	// used for testing
+	lastReport *Report
 }
 
 // NewMonitor creates a new NodeMonitor
@@ -210,16 +212,15 @@ func (mon *NodeMonitor) doChecks() {
 		mon.lastBadBlocks = time.Now()
 	}
 
+	if mon.backend == nil {
+		// if there's no backend, this is probably a test.
+		// Just set it and return
+		mon.lastReport = r
+		return
+	}
 	jsd, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {
 		log.Warn("Json marshall fail", "error", err)
-		return
-	}
-	if mon.backend == nil {
-		// if there's no backend, this is probably a test.
-		// Just print and return
-		r.Print()
-		fmt.Println(string(jsd))
 		return
 	}
 	if err := ioutil.WriteFile("www/data.json", jsd, 0777); err != nil {
