@@ -91,6 +91,8 @@ func (mon *NodeMonitor) loop() {
 	}
 }
 
+var headListCache []int
+
 func (mon *NodeMonitor) doChecks() {
 	var activeNodes []Node
 
@@ -130,6 +132,8 @@ func (mon *NodeMonitor) doChecks() {
 		headList = append(headList, int(k))
 	}
 	sort.Sort(sort.Reverse(sort.IntSlice(headList)))
+	// cache headlist for next round
+	headListCache = headList
 
 	// create a new report
 	r := NewReport(headList)
@@ -401,10 +405,21 @@ func cleanHashes(hashdir string, skip []common.Hash) {
 //  Search uses binary search to find and return the smallest index i
 //  in [0, n) at which f(i) is true
 func findSplit(num int, a Node, b Node) int {
-	splitBlock := sort.Search(num, func(i int) bool {
-		return a.HashAt(uint64(i), false) != b.HashAt(uint64(i), false)
+	for i := len(headListCache) - 1; i > 0; i-- {
+		head := headListCache[i]
+		if a.HashAt(uint64(head), false) != b.HashAt(uint64(head), false) {
+			return head
+		}
+	}
+	// If the split has not occured yet, we only need to search the remaining space
+	left := 0
+	if len(headListCache) > 0 {
+		left = headListCache[0]
+	}
+	splitBlock := sort.Search(num-left, func(i int) bool {
+		return a.HashAt(uint64(left+i), false) != b.HashAt(uint64(left+i), false)
 	})
-	return splitBlock
+	return splitBlock + left
 }
 
 // calls 'fn(a, b)' once for each pair in the given list of 'elems'

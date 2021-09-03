@@ -233,4 +233,19 @@ func TestMonitor(t *testing.T) {
 	nm.doChecks()
 	q3 := countQueries() - q1 - q2
 	t.Logf("Follow-up check after block progression: %d unique block queries", q3)
+
+	// Progress all nodes 2 blocks and fork
+	for _, node := range nodes {
+		tn, ok := node.(*testNode)
+		if ok {
+			tn.head += 2
+		}
+	}
+	nodes[2].(*testNode).head += 2
+	nodes[2].(*testNode).forks = append(nodes[2].(*testNode).forks, 13_000_004)
+	nodes[2].(*testNode).seeds = append(nodes[2].(*testNode).seeds, 4)
+	// Now test the same again, after block progression
+	nm.doChecks()
+	q4 := countQueries() - q1 - q2 - q3
+	t.Logf("Follow-up check after block progression and fork: %d unique block queries", q4)
 }
