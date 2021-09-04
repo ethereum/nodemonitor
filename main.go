@@ -85,6 +85,12 @@ func spinupMonitor(config nodes.Config) (*nodes.NodeMonitor, error) {
 		case "etherscan":
 			node, err = nodes.NewEtherscanNode(c.Name, config.EtherscanKey, config.EtherscanEndpoint,
 				db, c.Ratelimit)
+		case "testnode-canon":
+			node = nodes.NewLiveTestNode("canon", 13_000_000, []uint64{0}, []int{0})
+		case "testnode-fork-old":
+			node = nodes.NewLiveTestNode("old", 12_800_000, []uint64{0, 12_799_998}, []int{0, 2})
+		case "testnode-fork-recent":
+			node = nodes.NewLiveTestNode("legacy", 12_999_900, []uint64{0, 12_999_800}, []int{0, 1})
 		default:
 			log.Error("Wrong client type", "kind", c.Kind, "available", "[rpc, infura, alchemy]")
 			return nil, errors.New("invalid config")

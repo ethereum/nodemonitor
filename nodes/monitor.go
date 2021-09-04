@@ -177,7 +177,7 @@ func (mon *NodeMonitor) doChecks() {
 }
 
 func (mon *NodeMonitor) findSplits(activeNodes []Node) map[uint64]bool {
-
+	t0 := time.Now()
 	var heads = make(map[uint64]bool)
 	var cache = make(map[common.Hash]int)
 	var logCtx []interface{}
@@ -197,7 +197,7 @@ func (mon *NodeMonitor) findSplits(activeNodes []Node) map[uint64]bool {
 		logCtx = append(logCtx, fmt.Sprintf("%d-name", i), ver)
 	}
 	log.Info("Latest", logCtx...)
-
+	t1 := time.Now()
 	// splitSize is the max amount of blocks in any chain not accepted by all nodes.
 	// If one node is simply 'behind' that does not count, since it has yet
 	// to accept the canon chain
@@ -251,6 +251,8 @@ func (mon *NodeMonitor) findSplits(activeNodes []Node) map[uint64]bool {
 			}
 		},
 	)
+	t2 := time.Now()
+	log.Info("Update complete", "head-update", t1.Sub(t0), "forkcheck", t2.Sub(t1))
 	metrics.GetOrRegisterGauge("chain/split", registry).Update(int64(splitSize))
 	return heads
 }
