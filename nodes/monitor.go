@@ -24,14 +24,17 @@ import (
 
 // NodeMonitor monitors a set of nodes, and performs checks on them
 type NodeMonitor struct {
-	nodes          []Node
-	badBlocks      []map[common.Hash]*badBlockJson
-	quitCh         chan struct{}
-	backend        *blockDB
-	wg             sync.WaitGroup
-	reloadInterval time.Duration
-	lastClean      time.Time
-	lastBadBlocks  time.Time
+	nodes           []Node
+	badBlocks       []map[common.Hash]*badBlockJson
+	quitCh          chan struct{}
+	backend         *blockDB
+	wg              sync.WaitGroup
+	reloadInterval  time.Duration
+	lastClean       time.Time
+	lastBadBlocks   time.Time
+	forkHeightCache []int
+	// used for testing
+	lastReport *Report
 }
 
 // NewMonitor creates a new NodeMonitor
@@ -90,24 +93,7 @@ func (mon *NodeMonitor) loop() {
 }
 
 func (mon *NodeMonitor) doChecks() {
-
-	// splitSize is the max amount of blocks in any chain not accepted by all nodes.
-	// If one node is simply 'behind' that does not count, since it has yet
-	// to accept the canon chain
-	var splitSize int64
-	// We want to cross-check all 'latest' numbers. So if we have
-	// node 1: x,
-	// node 2: y,
-	// node 3: z,
-	// Then we want to check the following
-	// node 1: (y, z)
-	// node 2: (x, z),
-	// node 3: (x, y),
-	// To figure out if they are on the same chain, or have diverged
-
-	var heads = make(map[uint64]bool)
 	var activeNodes []Node
-	var logCtx []interface{}
 
 	doneCh := make(chan Node)
 	for _, node := range mon.nodes {
@@ -132,18 +118,100 @@ func (mon *NodeMonitor) doChecks() {
 			continue
 		}
 		activeNodes = append(activeNodes, node)
-		num := node.HeadNum()
-		ver, _ := node.Version()
-		heads[num] = true
-		logCtx = append(logCtx, fmt.Sprintf("%d-num", i), num)
-		logCtx = append(logCtx, fmt.Sprintf("%d-name", i), ver)
 	}
-
-	log.Info("Latest", logCtx...)
+	// Sort the activeNodes by name
+	sort.Slice(activeNodes, func(i, j int) bool {
+		return activeNodes[i].Name() < activeNodes[j].Name()
+	})
 
 	// Pair-wise, figure out the splitblocks (if any)
+	heads := mon.findSplits(activeNodes)
+	var headList []int
+	for k := range heads {
+		headList = append(headList, int(k))
+	}
+	sort.Sort(sort.Reverse(sort.IntSlice(headList)))
+	// cache headlist for next round
+	mon.forkHeightCache = headList
+
+	// create a new report
+	r := NewReport(headList)
+	for i, n := range mon.nodes {
+		// check vulnerability reports
+		vuln, err := checkNode(n)
+		if err != nil {
+			log.Info("Error while checking for vulnerabilities", "error", err)
+		}
+		r.AddToReport(n, mon.badBlocks[i], vuln)
+	}
+	// Add bad blocks every minute
+	if time.Since(mon.lastBadBlocks) > time.Minute {
+		for i := range mon.nodes {
+			blocks := getBadBlocks(mon.nodes[i])
+			for _, b := range blocks {
+				mon.badBlocks[i][b.Hash] = b
+			}
+		}
+		mon.lastBadBlocks = time.Now()
+	}
+
+	if mon.backend == nil {
+		// if there's no backend, this is probably a test.
+		// Just set it and return
+		mon.lastReport = r
+		return
+	}
+	jsd, err := json.MarshalIndent(r, "", "  ")
+	if err != nil {
+		log.Warn("Json marshall fail", "error", err)
+		return
+	}
+	if err := ioutil.WriteFile("www/data.json", jsd, 0777); err != nil {
+		log.Warn("Failed to write file", "error", err)
+		return
+	}
+	mon.provideHashes(r)
+	mon.provideBadBlocks()
+	mon.provideVulns()
+}
+
+func (mon *NodeMonitor) findSplits(activeNodes []Node) map[uint64]bool {
+	t0 := time.Now()
+	var heads = make(map[uint64]bool)
+	var cache = make(map[common.Hash]int)
+	var logCtx []interface{}
+
+	var distinctNodes []Node
+
+	for i, node := range activeNodes {
+		block := node.BlockAt(node.HeadNum(), false)
+		ver, _ := node.Version()
+		heads[block.num] = true
+		if _, ok := cache[block.hash]; !ok {
+			cache[block.hash] = i
+			distinctNodes = append(distinctNodes, node)
+		}
+
+		logCtx = append(logCtx, fmt.Sprintf("%d-num", i), block.num)
+		logCtx = append(logCtx, fmt.Sprintf("%d-name", i), ver)
+	}
+	log.Info("Latest", logCtx...)
+	t1 := time.Now()
+	// splitSize is the max amount of blocks in any chain not accepted by all nodes.
+	// If one node is simply 'behind' that does not count, since it has yet
+	// to accept the canon chain
+	var splitSize int64
+	// We want to cross-check all 'latest' numbers. So if we have
+	// node 1: x,
+	// node 2: y,
+	// node 3: z,
+	// Then we want to check the following
+	// node 1: (y, z)
+	// node 2: (x, z),
+	// node 3: (x, y),
+	// To figure out if they are on the same chain, or have diverged
 	var headMu sync.Mutex
-	forPairs(activeNodes,
+	forPairs(distinctNodes,
 		func(a, b Node) {
 			log.Info("Cross-checking", "a", a.Name(), "b", b.Name())
 			highest := a.HeadNum()
@@ -167,7 +235,7 @@ func (mon *NodeMonitor) doChecks() {
 				return
 			}
 			// They appear to have diverged
-			split := findSplit(int(highest), a, b)
+			split := findSplit(mon.forkHeightCache, int(highest), a, b)
 			splitLength := int64(int(highest) - split)
 			if splitSize < splitLength {
 				splitSize = splitLength
@@ -182,53 +250,10 @@ func (mon *NodeMonitor) doChecks() {
 			}
 		},
 	)
+	t2 := time.Now()
+	log.Info("Update complete", "head-update", t1.Sub(t0), "forkcheck", t2.Sub(t1))
 	metrics.GetOrRegisterGauge("chain/split", registry).Update(int64(splitSize))
-	var headList []int
-	for k := range heads {
-		headList = append(headList, int(k))
-	}
-	sort.Sort(sort.Reverse(sort.IntSlice(headList)))
-
-	// create a new report
-	r := NewReport(headList)
-	for i, n := range mon.nodes {
-		// check vulnerability reports
-		vuln, err := checkNode(n)
-		if err != nil {
-			log.Info("Error while checking for vulnerabilities", "error", err)
-		}
-		r.AddToReport(n, mon.badBlocks[i], vuln)
-	}
-	// Add bad blocks every minute
-	if time.Since(mon.lastBadBlocks) > time.Minute {
-		for i := range mon.nodes {
-			blocks := getBadBlocks(mon.nodes[i])
-			for _, b := range blocks {
-				mon.badBlocks[i][b.Hash] = b
-			}
-		}
-		mon.lastBadBlocks = time.Now()
-	}
-
-	jsd, err := json.MarshalIndent(r, "", "  ")
-	if err != nil {
-		log.Warn("Json marshall fail", "error", err)
-		return
-	}
-	if mon.backend == nil {
-		// if there's no backend, this is probably a test.
-		// Just print and return
-		r.Print()
-		fmt.Println(string(jsd))
-		return
-	}
-	if err := ioutil.WriteFile("www/data.json", jsd, 0777); err != nil {
-		log.Warn("Failed to write file", "error", err)
-		return
-	}
-	mon.provideHashes(r)
-	mon.provideBadBlocks()
-	mon.provideVulns()
+	return heads
 }
 
 func (mon *NodeMonitor) provideHashes(r *Report) {
@@ -380,11 +405,26 @@ func cleanHashes(hashdir string, skip []common.Hash) {
 //
 //  Search uses binary search to find and return the smallest index i
 //  in [0, n) at which f(i) is true
-func findSplit(num int, a Node, b Node) int {
-	splitBlock := sort.Search(num, func(i int) bool {
-		return a.HashAt(uint64(i), false) != b.HashAt(uint64(i), false)
+func findSplit(forkHeightCache []int, num int, a Node, b Node) int {
+	for i := len(forkHeightCache) - 1; i > 0; i-- {
+		head := forkHeightCache[i]
+		if a.HashAt(uint64(head), false) != b.HashAt(uint64(head), false) {
+			// they differ at 'head'
+			if head == 0 || a.HashAt(uint64(head-1), false) == b.HashAt(uint64(head-1), false) {
+				// ... and parent of 'head' is identical (or 'head' is genesis)
+				return head
+			}
+		}
+	}
+	// If the split has not occured yet, we only need to search the remaining space
+	left := 0
+	if len(forkHeightCache) > 0 {
+		left = forkHeightCache[0]
+	}
+	splitBlock := sort.Search(num-left, func(i int) bool {
+		return a.HashAt(uint64(left+i), false) != b.HashAt(uint64(left+i), false)
 	})
-	return splitBlock
+	return splitBlock + left
 }
 
 // calls 'fn(a, b)' once for each pair in the given list of 'elems'

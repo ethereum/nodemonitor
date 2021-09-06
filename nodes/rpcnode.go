@@ -67,9 +67,9 @@ type RemoteNode struct {
 	latest       *blockInfo
 	chainHistory map[uint64]*blockInfo
 	// backend to store hash -> header into
-	db     *blockDB
-	status int
-	mu sync.RWMutex
+	db           *blockDB
+	status       int
+	mu           sync.RWMutex
 	lastProgress int64 // Last unix-time the node progressed the chain
 
 	headGauge metrics.Gauge
@@ -297,7 +297,23 @@ func (node *RemoteNode) BlockAt(num uint64, force bool) *blockInfo {
 }
 
 func (node *RemoteNode) HashAt(num uint64, force bool) common.Hash {
-	if bl := node.BlockAt(num, force); bl != nil {
+	node.mu.Lock()
+	defer node.mu.Unlock()
+	if !force {
+		// Unless we're explicitly asked to refetch, we can use the cache. If so,
+		// we can check either the block at 'num' or the parentHash of 'num-1'
+		if node.latest != nil && node.latest.num < num {
+			return common.Hash{}
+		}
+		if bl, ok := node.chainHistory[num]; ok {
+			return bl.hash // have it already, don't refetch it
+		}
+		if child, ok := node.chainHistory[num+1]; ok {
+			return child.pHash
+		}
+	}
+	// No, need to reach out to the remote node to fetch it
+	if bl, _ := node.fetchHeader(new(big.Int).SetUint64(num)); bl != nil {
 		return bl.hash
 	}
 	return common.Hash{}

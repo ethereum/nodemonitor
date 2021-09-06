@@ -1,0 +1,38 @@
+
+
+# How often to reload data from the nodes
+reload_interval = "10s"
+# If specified, a http server will serve static content here
+server_address = "0.0.0.0:8080"
+
+  #apikey = ""
+  #endpoint = "https://api.etherscan.io/api?module=proxy&action=eth_blockNumber&apikey=YourApiKeyToken"
+  #endpoint2="https://api.etherscan.io/api?module=proxy&action=eth_getBlockByNumber&tag=0x10d4f&boolean=true&apikey=YourApiKeyToken"
+[[clients]]
+  kind="testnode-canon"
+[[clients]]
+  kind="testnode-canon"
+[[clients]]
+  kind="testnode-canon"
+[[clients]]
+  kind="testnode-fork-old"
+[[clients]]
+  kind="testnode-fork-recent"
+[[clients]]
+  kind="testnode-fork-recent"
+[[clients]]
+  kind="testnode-fork-recent"
+
+  [Metrics]
+
+enabled = false
+endpoint = "https://geth-bench-influx.ethdevops.io/"
+username = "metrics"
+database  = "metrics"
+password  = "xxx"
+namespace = "monitoring."
+
+#[Etherscan]
+
+# https://api.etherscan.io/api?module=proxy&action=eth_getBlockByNumber&tag=0x10d4f&boolean=true&apikey=YourApiKeyToken
+# https://api.etherscan.io/api?module=proxy&action=eth_blockNumber&apikey=YourApiKeyToken

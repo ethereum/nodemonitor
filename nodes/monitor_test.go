@@ -2,22 +2,15 @@ package nodes
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
 )
 
-type testNode struct {
-	id    string
-	chain []*blockInfo
-	head  int // points to where we're currently at, in the chain
-}
 
 type brokenNode struct {
 	id string
@@ -61,111 +54,100 @@ func (b brokenNode) BadBlocks() []*eth.BadBlockArgs {
 	return []*eth.BadBlockArgs{}
 }
 
-func newTestNode(id string, head int, chain []*blockInfo) *testNode {
-	return &testNode{
-		id,
-		chain,
-		head,
-	}
-}
-
-func (t *testNode) Status() int {
-	return 1
-}
-
-func (t *testNode) SetStatus(int) {}
-
-func (t *testNode) Version() (string, error) {
-
-	return "TestNode/v0.1/darwin/go1.4.1", nil
-}
-
-func (t *testNode) Name() string {
-	return fmt.Sprintf("TestNode(%v)", t.id)
-}
-
-func (t *testNode) UpdateLatest() error {
-	return nil
-}
-
-func (t *testNode) BlockAt(num uint64, force bool) *blockInfo {
-	if num > uint64(t.head) {
-		return nil
-	}
-	log.Trace("BlockAt", "node", t.id, "query", num)
-	return t.chain[num]
-}
-
-func (t *testNode) HashAt(num uint64, force bool) common.Hash {
-	if bl := t.BlockAt(num, force); bl != nil {
-		return bl.hash
-	}
-	return common.Hash{}
-}
-
-func (t *testNode) HeadNum() uint64 {
-	return uint64(t.head)
-}
-
-func (t *testNode) LastProgress() int64 {
-	return 0
-}
-
-func (t *testNode) BadBlocks() []*eth.BadBlockArgs {
-	return []*eth.BadBlockArgs{}
-}
 
 func TestMonitor(t *testing.T) {
 	log.Root().SetHandler(log.LvlFilterHandler(
-		log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+		log.LvlCrit, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 
-	//generate a base chain
-	var a = make([]*blockInfo, 3000)
-	var b = make([]*blockInfo, 3000)
-	var c = make([]*blockInfo, 3000)
-
-	for i := 0; i < len(a); i++ {
-		h := common.BytesToHash(crypto.Keccak256([]byte(fmt.Sprintf("a :%d", i))))
-		bl := &blockInfo{
-			num:  uint64(i),
-			hash: h,
-		}
-		a[i] = bl
-	}
-	// Another chain splits of at block 1000
-	copy(b, a)
-	for i := 1000; i < len(b); i++ {
-		h := common.BytesToHash(crypto.Keccak256([]byte(fmt.Sprintf("b :%d", i))))
-		bl := &blockInfo{
-			num:  uint64(i),
-			hash: h,
-		}
-		b[i] = bl
-	}
-
-	// Third chain splits from B at block 1500
-	copy(c, b)
-	for i := 1500; i < len(c); i++ {
-		h := common.BytesToHash(crypto.Keccak256([]byte(fmt.Sprintf("c :%d", i))))
-		bl := &blockInfo{
-			num:  uint64(i),
-			hash: h,
-		}
-		c[i] = bl
-	}
+	// Disable the vuln check for tests
+	disableVulnCheck = true
 
 	// spin up three nodes
 	var nodes []Node
-	nodes = append(nodes, newTestNode("node-a", 2704, a))
-	nodes = append(nodes, newTestNode("node-b", 2800, b))
-	nodes = append(nodes, newTestNode("node-c", 2202, c))
-	// D is same as A, but two blocks behind
-	nodes = append(nodes, newTestNode("node-d", 2702, a))
 
+	// 10 nodes are in agreement
+	nodes = append(nodes, newTestNode("canon-a", 13_000_000, []uint64{0}, []int{0}))
+	nodes = append(nodes, newTestNode("canon-b", 13_000_000, []uint64{0}, []int{0}))
+	nodes = append(nodes, newTestNode("canon-c", 13_000_000, []uint64{0}, []int{0}))
+	nodes = append(nodes, newTestNode("canon-d", 13_000_000, []uint64{0}, []int{0}))
+	nodes = append(nodes, newTestNode("canon-e", 13_000_000, []uint64{0}, []int{0}))
+	nodes = append(nodes, newTestNode("canon-f", 13_000_000, []uint64{0}, []int{0}))
+	nodes = append(nodes, newTestNode("canon-g", 13_000_000, []uint64{0}, []int{0}))
+	nodes = append(nodes, newTestNode("canon-h", 13_000_000, []uint64{0}, []int{0}))
+	nodes = append(nodes, newTestNode("canon-i", 13_000_000, []uint64{0}, []int{0}))
+	nodes = append(nodes, newTestNode("canon-j", 13_000_000, []uint64{0}, []int{0}))
+
+	// Three nodes forked off 200 blocks earlier, and are 100 blocks behind too
+	nodes = append(nodes, newTestNode("fork-a", 12_999_900, []uint64{0, 12_999_800}, []int{0, 1}))
+	nodes = append(nodes, newTestNode("fork-b", 12_999_900, []uint64{0, 12_999_800}, []int{0, 1}))
+	nodes = append(nodes, newTestNode("fork-c", 12_999_900, []uint64{0, 12_999_800}, []int{0, 1}))
+
+	// And one got stuck on a hardfork, it progressed only two blocks
+	nodes = append(nodes, newTestNode("old-a", 12_800_000, []uint64{0, 12_799_998}, []int{0, 2}))
+	// Two nodes are br0ken
 	nodes = append(nodes, &brokenNode{"broken-a"})
 	nodes = append(nodes, &brokenNode{"broken-b"})
-	nodes = append(nodes, &brokenNode{"broken-c"})
 
-	mon, _ := NewMonitor(nodes, nil, time.Second)
-	mon.doChecks()
+	nm, err := NewMonitor(nodes, nil, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if nm.lastReport == nil {
+		t.Fatalf("missing report")
+	}
+	// Check the 'interesting numbers'. We expect the following:
+	// heads: 13M, 12_999_900, 12_800_000
+	// forks: 12_999_800, 12_799_998
+	// fork parents:12999799, 12_799_998
+	if have, want := len(nm.lastReport.Numbers), 7; have != want {
+		nm.lastReport.Print()
+		t.Fatalf("wrong numbers, want %d, have %d", want, have)
+	}
+	var countQueries = func() int {
+		queries := 0
+		for _, node := range nodes {
+			tn, ok := node.(*testNode)
+			if ok {
+				//t.Logf("%v was queried for %d blocks, totalling %d queries", tn.Name(),
+				//	len(tn.queriedNumbers), tn.totalQueries)
+				queries += len(tn.queriedNumbers)
+			}
+		}
+		return queries
+	}
+	q1 := countQueries()
+	t.Logf("Initial check: %d unique block queries", q1)
+	// Now test the same again, without any progression of the nodess
+	nm.doChecks()
+	q2 := countQueries() - q1
+	t.Logf("Follow-up check: %d unique block queries", q2)
+	if q2 != 0 {
+		t.Logf("expected zero queries on follow-up, got %d", q2)
+	}
+	// Progress all nodes 2 blocks
+	for _, node := range nodes {
+		tn, ok := node.(*testNode)
+		if ok {
+			tn.head += 2
+		}
+	}
+	// Now test the same again, after block progression
+	nm.doChecks()
+	q3 := countQueries() - q1 - q2
+	t.Logf("Follow-up check after block progression: %d unique block queries", q3)
+
+	// Progress all nodes 2 blocks and fork
+	for _, node := range nodes {
+		tn, ok := node.(*testNode)
+		if ok {
+			tn.head += 2
+		}
+	}
+	nodes[2].(*testNode).head += 2
+	nodes[2].(*testNode).forks = append(nodes[2].(*testNode).forks, 13_000_004)
+	nodes[2].(*testNode).seeds = append(nodes[2].(*testNode).seeds, 4)
+	// Now test the same again, after block progression
+	nm.doChecks()
+	q4 := countQueries() - q1 - q2 - q3
+	t.Logf("Follow-up check after block progression and fork: %d unique block queries", q4)
 }
