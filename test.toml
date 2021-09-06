@@ -5,6 +5,11 @@ reload_interval = "10s"
 # If specified, a http server will serve static content here
 server_address = "0.0.0.0:8080"
 
+# Shown in the document title, if specified
+chain_name="EphemeralNet"
+#chain_name="Goerli"
+#chain_name="Mainnet"
+
   #apikey = ""
   #endpoint = "https://api.etherscan.io/api?module=proxy&action=eth_blockNumber&apikey=YourApiKeyToken"
   #endpoint2="https://api.etherscan.io/api?module=proxy&action=eth_getBlockByNumber&tag=0x10d4f&boolean=true&apikey=YourApiKeyToken"

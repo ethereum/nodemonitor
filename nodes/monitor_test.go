@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-
 type brokenNode struct {
 	id string
 }
@@ -54,7 +53,6 @@ func (b brokenNode) BadBlocks() []*eth.BadBlockArgs {
 	return []*eth.BadBlockArgs{}
 }
 
-
 func TestMonitor(t *testing.T) {
 	log.Root().SetHandler(log.LvlFilterHandler(
 		log.LvlCrit, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
@@ -88,7 +86,7 @@ func TestMonitor(t *testing.T) {
 	nodes = append(nodes, &brokenNode{"broken-a"})
 	nodes = append(nodes, &brokenNode{"broken-b"})
 
-	nm, err := NewMonitor(nodes, nil, time.Second)
+	nm, err := NewMonitor(nodes, nil, time.Second, "Playdoh-net")
 	if err != nil {
 		t.Fatal(err)
 	}

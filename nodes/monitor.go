@@ -33,12 +33,13 @@ type NodeMonitor struct {
 	lastClean       time.Time
 	lastBadBlocks   time.Time
 	forkHeightCache []int
+	chainName       string
 	// used for testing
 	lastReport *Report
 }
 
 // NewMonitor creates a new NodeMonitor
-func NewMonitor(nodes []Node, db *blockDB, reload time.Duration) (*NodeMonitor, error) {
+func NewMonitor(nodes []Node, db *blockDB, reload time.Duration, chainName string) (*NodeMonitor, error) {
 	// Do initial healthcheck
 	for _, node := range nodes {
 		log.Info("Checking health", "node", node.Name())
@@ -65,7 +66,9 @@ func NewMonitor(nodes []Node, db *blockDB, reload time.Duration) (*NodeMonitor, 
 		quitCh:         make(chan struct{}),
 		backend:        db,
 		reloadInterval: reload,
+		chainName:      chainName,
 	}
+
 	nm.doChecks()
 	return nm, nil
 }
@@ -135,7 +138,7 @@ func (mon *NodeMonitor) doChecks() {
 	mon.forkHeightCache = headList
 
 	// create a new report
-	r := NewReport(headList)
+	r := NewReport(headList, mon.chainName)
 	for i, n := range mon.nodes {
 		// check vulnerability reports
 		vuln, err := checkNode(n)

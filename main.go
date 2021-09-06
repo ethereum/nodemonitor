@@ -102,7 +102,7 @@ func spinupMonitor(config nodes.Config) (*nodes.NodeMonitor, error) {
 		log.Info("Client configured", "name", c.Name)
 	}
 
-	return nodes.NewMonitor(clients, db, reload)
+	return nodes.NewMonitor(clients, db, reload, config.ChainName)
 }
 
 func spinupServer(config nodes.Config) error {

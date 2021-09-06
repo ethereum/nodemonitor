@@ -145,6 +145,10 @@ function progress(message){
 
 // onData handles the main data chunks
 function onData(data){
+    // Set title
+    if (data["Chain"]){
+        $("title").text(data["Chain"])
+    }
     // Populate node info
     var nodeB = $("#nodes tbody")
     nodeB.empty()
