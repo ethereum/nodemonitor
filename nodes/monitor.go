@@ -24,14 +24,15 @@ import (
 
 // NodeMonitor monitors a set of nodes, and performs checks on them
 type NodeMonitor struct {
-	nodes          []Node
-	badBlocks      []map[common.Hash]*badBlockJson
-	quitCh         chan struct{}
-	backend        *blockDB
-	wg             sync.WaitGroup
-	reloadInterval time.Duration
-	lastClean      time.Time
-	lastBadBlocks  time.Time
+	nodes           []Node
+	badBlocks       []map[common.Hash]*badBlockJson
+	quitCh          chan struct{}
+	backend         *blockDB
+	wg              sync.WaitGroup
+	reloadInterval  time.Duration
+	lastClean       time.Time
+	lastBadBlocks   time.Time
+	forkHeightCache []int
 	// used for testing
 	lastReport *Report
 }
@@ -91,8 +92,6 @@ func (mon *NodeMonitor) loop() {
 	}
 }
 
-var headListCache []int
-
 func (mon *NodeMonitor) doChecks() {
 	var activeNodes []Node
 
@@ -133,7 +132,7 @@ func (mon *NodeMonitor) doChecks() {
 	}
 	sort.Sort(sort.Reverse(sort.IntSlice(headList)))
 	// cache headlist for next round
-	headListCache = headList
+	mon.forkHeightCache = headList
 
 	// create a new report
 	r := NewReport(headList)
@@ -236,7 +235,7 @@ func (mon *NodeMonitor) findSplits(activeNodes []Node) map[uint64]bool {
 				return
 			}
 			// They appear to have diverged
-			split := findSplit(int(highest), a, b)
+			split := findSplit(mon.forkHeightCache, int(highest), a, b)
 			splitLength := int64(int(highest) - split)
 			if splitSize < splitLength {
 				splitSize = splitLength
@@ -406,17 +405,21 @@ func cleanHashes(hashdir string, skip []common.Hash) {
 //
 //  Search uses binary search to find and return the smallest index i
 //  in [0, n) at which f(i) is true
-func findSplit(num int, a Node, b Node) int {
-	for i := len(headListCache) - 1; i > 0; i-- {
-		head := headListCache[i]
+func findSplit(forkHeightCache []int, num int, a Node, b Node) int {
+	for i := len(forkHeightCache) - 1; i > 0; i-- {
+		head := forkHeightCache[i]
 		if a.HashAt(uint64(head), false) != b.HashAt(uint64(head), false) {
-			return head
+			// they differ at 'head'
+			if head == 0 || a.HashAt(uint64(head-1), false) == b.HashAt(uint64(head-1), false) {
+				// ... and parent of 'head' is identical (or 'head' is genesis)
+				return head
+			}
 		}
 	}
 	// If the split has not occured yet, we only need to search the remaining space
 	left := 0
-	if len(headListCache) > 0 {
-		left = headListCache[0]
+	if len(forkHeightCache) > 0 {
+		left = forkHeightCache[0]
 	}
 	splitBlock := sort.Search(num-left, func(i int) bool {
 		return a.HashAt(uint64(left+i), false) != b.HashAt(uint64(left+i), false)
