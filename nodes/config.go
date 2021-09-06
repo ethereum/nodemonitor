@@ -2,6 +2,7 @@ package nodes
 
 type Config struct {
 	ReloadInterval string
+	ChainName      string
 	ServerAddress  string
 	Clients        []ClientInfo
 	Metrics        metricsConfig

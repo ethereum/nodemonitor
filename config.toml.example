@@ -5,13 +5,19 @@ reload_interval = "10s"
 # If specified, a http server will serve static content here
 server_address = "0.0.0.0:8080"
 
+# Shown in the document title, if specified
+#chain_name="Mainnet"
+#chain_name="Goerli"
+#chain_name="Ropsten"
+#chain_name="Rinkeby"
+
 # Third party providers
-infura_key = "your_key"
-infura_endpoint="https://mainnet.infura.io/v3/"
-alchemy_key = "your_key"
-alchemy_endpoint = "https://eth-mainnet.alchemyapi.io/v2/"
-etherscan_key = "your_key"
-etherscan_endpoint = "https://api.etherscan.io/api"
+# infura_key = "your_key"
+# infura_endpoint="https://mainnet.infura.io/v3/"
+# alchemy_key = "your_key"
+# alchemy_endpoint = "https://eth-mainnet.alchemyapi.io/v2/"
+# etherscan_key = "your_key"
+# etherscan_endpoint = "https://api.etherscan.io/api"
 
 
 [[clients]]
@@ -32,23 +38,22 @@ etherscan_endpoint = "https://api.etherscan.io/api"
   url = "http://localhost:8548"
   name = "openethereum"
 
-[[clients]]
-
+#[[clients]]
   # The 'infura' kind needs credentials
-  kind="infura"
-  name = "infura"
+#  kind="infura"
+#  name = "infura"
   # The rate_limit is number of requests per second allowed through
-  rate_limit=5
+#  rate_limit=5
 
-[[clients]]
-
-  kind="alchemy"
-  name = "alchemy"
-  rate_limit=5
+#[[clients]]
+#
+#  kind="alchemy"
+#  name = "alchemy"
+#  rate_limit=5
 
 [Metrics]
 
-enabled = true
+#enabled = true
 endpoint = "https://influx-database.yourdomain.io/"
 username = "metrics"
 database  = "metrics"

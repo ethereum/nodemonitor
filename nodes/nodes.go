@@ -61,14 +61,16 @@ type Report struct {
 	Numbers   []int
 	Hashes    []common.Hash
 	BadBlocks []*badBlockJson
+	Chain     string
 }
 
-func NewReport(headList []int) *Report {
+func NewReport(headList []int, chainName string) *Report {
 	return &Report{
 		Numbers:   headList,
 		Cols:      nil,
 		Rows:      make(map[int][]string),
 		BadBlocks: make([]*badBlockJson, 0),
+		Chain:     chainName,
 	}
 }
 
