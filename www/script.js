@@ -233,16 +233,17 @@ function onData(data){
     badblocksB.empty()
     data.BadBlocks.forEach(function(badblock) {
         let tRow = utils.tag("tr")
-        tRow.append(utils.tag("td", badblock.Client))
-        tRow.append(utils.tag("td", utils.shortHash(badblock.Hash)))
+        tRow.append(utils.tag("td", badblock.number))
+        tRow.append(utils.tag("td", utils.shortHash(badblock.hash)))
+        tRow.append(utils.tag("td", badblock.clients))
         $(tRow).on('click', function(){
-            showBadBlock(badblock.Client, badblock.Hash)
+            showBadBlock( badblock.hash)
         })
         badblocksB.append(tRow)
     })
 }
 
-function showBadBlock(client, hash){
+function showBadBlock( hash){
     $.ajax("badblocks/"+hash+".json", {
         dataType: "json",
         success: function(data){
