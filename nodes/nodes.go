@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/eth"
 )
 
@@ -57,7 +58,7 @@ type badBlockJson struct {
 	Number     *big.Int        `json:"number"`
 	ParentHash *common.Hash    `json:"parentHash"`
 	Time       *uint64         `json:"timestamp"`
-	Extra      []byte          `json:"extraData"`
+	Extra      hexutil.Bytes   `json:"extraData"`
 	Coinbase   *common.Address `json:"miner"`
 	Root       *common.Hash    `json:"stateRoot"`
 }

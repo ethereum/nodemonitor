@@ -117,7 +117,7 @@ func (t *testNode) BadBlocks() []*eth.BadBlockArgs {
 			GasLimit:    8_000_000,
 			GasUsed:     7_000_000,
 			Time:        uint64(time.Now().Unix()),
-			Extra:       nil,
+			Extra:       []byte("Ken sent me"),
 			MixDigest:   common.Hash{},
 			Nonce:       types.BlockNonce{},
 			BaseFee:     nil,
