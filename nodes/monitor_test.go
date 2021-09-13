@@ -53,6 +53,10 @@ func (b brokenNode) BadBlocks() []*eth.BadBlockArgs {
 	return []*eth.BadBlockArgs{}
 }
 
+func (b brokenNode) BadBlockCount() int {
+	return 0
+}
+
 func TestMonitor(t *testing.T) {
 	log.Root().SetHandler(log.LvlFilterHandler(
 		log.LvlCrit, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))

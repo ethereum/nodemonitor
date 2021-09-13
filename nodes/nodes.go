@@ -2,6 +2,8 @@ package nodes
 
 import (
 	"fmt"
+	"math/big"
+	"sort"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -36,6 +38,7 @@ type Node interface {
 	HashAt(num uint64, force bool) common.Hash
 	HeadNum() uint64
 	BadBlocks() []*eth.BadBlockArgs
+	BadBlockCount() int
 }
 
 type clientJson struct {
@@ -48,9 +51,29 @@ type clientJson struct {
 }
 
 type badBlockJson struct {
-	Client string
-	Hash   common.Hash
-	RLP    string `json:"-"`
+	Clients    []string        `json:"clients"`
+	RLP        string          `json:"rlp"`
+	Hash       common.Hash     `json:"hash"`
+	Number     *big.Int        `json:"number"`
+	ParentHash *common.Hash    `json:"parentHash"`
+	Time       *uint64         `json:"timeStamp"`
+	Extra      []byte          `json:"extraData"`
+	Coinbase   *common.Address `json:"miner"`
+	Root       *common.Hash    `json:"stateRoot"`
+}
+
+type BadBlockList []*badBlockJson
+
+func (b BadBlockList) Len() int {
+	return len(b)
+}
+
+func (b BadBlockList) Less(i, j int) bool {
+	return b[i].Number.Cmp(b[j].Number) < 0
+}
+
+func (b BadBlockList) Swap(i, j int) {
+	b[i], b[j] = b[j], b[i]
 }
 
 // Report represents one 'snapshot' of the state of the nodes, where they are at
@@ -60,7 +83,7 @@ type Report struct {
 	Rows      map[int][]string
 	Numbers   []int
 	Hashes    []common.Hash
-	BadBlocks []*badBlockJson
+	BadBlocks BadBlockList
 	Chain     string
 }
 
@@ -106,8 +129,19 @@ func (r *Report) Print() {
 	}
 }
 
+func (r *Report) addBadBlocks(badBlocks map[common.Hash]*badBlockJson) {
+	for _, bb := range badBlocks {
+		r.BadBlocks = append(r.BadBlocks, bb)
+	}
+	sort.Sort(sort.Reverse(r.BadBlocks))
+	// don't show more than 20 bad blocks
+	if len(r.BadBlocks) > 20 {
+		r.BadBlocks = r.BadBlocks[:20]
+	}
+}
+
 // AddToReport adds the given node to the report
-func (r *Report) AddToReport(node Node, badBlocks map[common.Hash]*badBlockJson, vuln []vulnJson) {
+func (r *Report) AddToReport(node Node, vuln []vulnJson) {
 	v, _ := node.Version()
 	// Add general node properties
 	np := &clientJson{
@@ -115,7 +149,7 @@ func (r *Report) AddToReport(node Node, badBlocks map[common.Hash]*badBlockJson,
 		Name:         node.Name(),
 		Status:       node.Status(),
 		LastProgress: node.LastProgress(),
-		BadBlocks:    len(badBlocks),
+		BadBlocks:    node.BadBlockCount(), // TODO add counter len(badBlocks),
 	}
 	// Add vulnerabilites if applicable
 	if len(vuln) != 0 {
@@ -125,10 +159,6 @@ func (r *Report) AddToReport(node Node, badBlocks map[common.Hash]*badBlockJson,
 		}
 	}
 	r.Cols = append(r.Cols, np)
-	// Add bad blocks
-	for _, block := range badBlocks {
-		r.BadBlocks = append(r.BadBlocks, block)
-	}
 	// Add hashes
 	for _, num := range r.Numbers {
 		row := r.Rows[num]

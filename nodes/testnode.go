@@ -2,15 +2,21 @@ package nodes
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
+	"math/big"
 	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 type testNode struct {
@@ -96,7 +102,50 @@ func (t *testNode) LastProgress() int64 {
 }
 
 func (t *testNode) BadBlocks() []*eth.BadBlockArgs {
-	return []*eth.BadBlockArgs{}
+	var rlpHex string
+	var blHash common.Hash
+	var jsonBlock []byte
+	{
+		var h = &types.Header{
+			Coinbase:    common.HexToAddress("0x12123123012301230"),
+			Root:        common.HexToHash("0xdeadbeef"),
+			TxHash:      common.Hash{},
+			ReceiptHash: common.Hash{},
+			Bloom:       types.Bloom{},
+			Difficulty:  big.NewInt(123123),
+			Number:      big.NewInt(1_000_000 + time.Now().Unix()),
+			GasLimit:    8_000_000,
+			GasUsed:     7_000_000,
+			Time:        uint64(time.Now().Unix()),
+			Extra:       nil,
+			MixDigest:   common.Hash{},
+			Nonce:       types.BlockNonce{},
+			BaseFee:     nil,
+		}
+		var bl = types.NewBlock(h, nil, nil, nil, trie.NewStackTrie(nil))
+		blHash = bl.Hash()
+		rlpstr, err := rlp.EncodeToBytes(bl)
+		if err != nil {
+			panic(err)
+		}
+		rlpHex = hexutil.Encode(rlpstr)
+		jsonBlock, err = json.Marshal(&bl)
+		if err != nil {
+			panic(err)
+		}
+	}
+	var block map[string]interface{}
+	json.Unmarshal(jsonBlock, &block)
+	return []*eth.BadBlockArgs{
+		&eth.BadBlockArgs{
+			RLP:   rlpHex,
+			Block: block,
+			Hash:  blHash,
+		}}
+}
+
+func (node *testNode) BadBlockCount() int {
+	return len(node.BadBlocks())
 }
 
 func newTestNode(id string, head int, forks []uint64, seeds []int) *testNode {

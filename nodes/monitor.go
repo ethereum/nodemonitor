@@ -25,7 +25,7 @@ import (
 // NodeMonitor monitors a set of nodes, and performs checks on them
 type NodeMonitor struct {
 	nodes           []Node
-	badBlocks       []map[common.Hash]*badBlockJson
+	badBlocks       map[common.Hash]*badBlockJson
 	quitCh          chan struct{}
 	backend         *blockDB
 	wg              sync.WaitGroup
@@ -55,14 +55,10 @@ func NewMonitor(nodes []Node, db *blockDB, reload time.Duration, chainName strin
 	if reload == 0 {
 		reload = 10 * time.Second
 	}
-	badBlocks := make([]map[common.Hash]*badBlockJson, len(nodes))
-	for i := range badBlocks {
-		badBlocks[i] = make(map[common.Hash]*badBlockJson)
-	}
 
 	nm := &NodeMonitor{
 		nodes:          nodes,
-		badBlocks:      badBlocks,
+		badBlocks:      make(map[common.Hash]*badBlockJson),
 		quitCh:         make(chan struct{}),
 		backend:        db,
 		reloadInterval: reload,
@@ -139,24 +135,17 @@ func (mon *NodeMonitor) doChecks() {
 
 	// create a new report
 	r := NewReport(headList, mon.chainName)
-	for i, n := range mon.nodes {
+	for _, n := range mon.nodes {
 		// check vulnerability reports
 		vuln, err := checkNode(n)
 		if err != nil {
 			log.Info("Error while checking for vulnerabilities", "error", err)
 		}
-		r.AddToReport(n, mon.badBlocks[i], vuln)
+		r.AddToReport(n, vuln)
 	}
-	// Add bad blocks every minute
-	if time.Since(mon.lastBadBlocks) > time.Minute {
-		for i := range mon.nodes {
-			blocks := getBadBlocks(mon.nodes[i])
-			for _, b := range blocks {
-				mon.badBlocks[i][b.Hash] = b
-			}
-		}
-		mon.lastBadBlocks = time.Now()
-	}
+	// Update bad blocks
+	mon.checkBadBlocks()
+	r.addBadBlocks(mon.badBlocks)
 
 	if mon.backend == nil {
 		// if there's no backend, this is probably a test.
@@ -176,6 +165,35 @@ func (mon *NodeMonitor) doChecks() {
 	mon.provideHashes(r)
 	mon.provideBadBlocks()
 	mon.provideVulns()
+}
+
+func (mon *NodeMonitor) checkBadBlocks() {
+	if time.Since(mon.lastBadBlocks) < time.Minute {
+		return
+	}
+	mon.lastBadBlocks = time.Now()
+	for _, node := range mon.nodes {
+		blocks := getBadBlocks(node)
+		for i, _ := range blocks {
+			hash := blocks[i].Hash
+			info := mon.badBlocks[hash]
+			if info == nil {
+				mon.badBlocks[hash] = blocks[i]
+				log.Info("Added (new) bad block", "hash", hash)
+				continue
+			}
+			// it's already reported. Add this client name to it (if not set already)
+			var alreadyThere bool
+			for _, c := range info.Clients {
+				if c == node.Name() {
+					alreadyThere = true
+				}
+			}
+			if !alreadyThere {
+				info.Clients = append(info.Clients, node.Name())
+			}
+		}
+	}
 }
 
 func (mon *NodeMonitor) findSplits(activeNodes []Node) map[uint64]bool {
@@ -305,50 +323,42 @@ func (mon *NodeMonitor) provideVulns() {
 	}
 }
 
+// provideBadBlocks stores (newly found) bad block to disk
 func (mon *NodeMonitor) provideBadBlocks() {
-	for i := range mon.badBlocks {
-		for _, block := range mon.badBlocks[i] {
-			fname := fmt.Sprintf("www/badblocks/0x%x.json", block.Hash)
-			// only write it if it isn't already there
-			if _, err := os.Stat(fname); os.IsNotExist(err) {
-				var data []byte
-				// try to retrieve header from backend
-				if bl := mon.backend.get(block.Hash); bl != nil {
-					type Header types.Header
-					data, err = json.MarshalIndent(struct {
-						Header
-						RLP string `json:"rlp"`
-					}{
-						Header: Header(*bl),
-						RLP:    block.RLP,
-					}, "", " ")
-					if err != nil {
-						log.Warn("Failed to marshal header", "error", err)
-					}
-				}
-				if len(data) == 0 {
-					// block not found in backend, print what we know
-					type msBadBlockJSON struct {
-						Client string      `json:"client"`
-						Hash   common.Hash `json:"hash"`
-						RLP    string      `json:"rlp"`
-					}
-					b := msBadBlockJSON{
-						Client: block.Client,
-						Hash:   block.Hash,
-						RLP:    block.RLP,
-					}
-					data, err = json.MarshalIndent(b, "", " ")
-					if err != nil {
-						log.Warn("Failed to marshal header", "error", err)
-						continue
-					}
-				}
-				if err := ioutil.WriteFile(fname, data, 0777); err != nil {
-					log.Warn("Failed to write file", "error", err)
-					return
-				}
+	for hash, block := range mon.badBlocks {
+		fname := fmt.Sprintf("www/badblocks/0x%x.json", hash)
+		// only write it if it isn't already there
+		if _, err := os.Stat(fname); !os.IsNotExist(err) {
+			continue
+		}
+		var data []byte
+		var err error
+		// try to retrieve header from backend
+		if bl := mon.backend.get(block.Hash); bl != nil {
+			type Header types.Header
+			data, err = json.MarshalIndent(struct {
+				Header
+				RLP string `json:"rlp"`
+			}{
+				Header: Header(*bl),
+				RLP:    block.RLP,
+			}, "", " ")
+			if err != nil {
+				log.Warn("Failed to marshal header", "error", err)
 			}
+		}
+		if len(data) == 0 {
+			// block not found in backend, print what we know
+			b := block
+			data, err = json.MarshalIndent(b, "", " ")
+			if err != nil {
+				log.Warn("Failed to marshal header", "error", err)
+				continue
+			}
+		}
+		if err := ioutil.WriteFile(fname, data, 0777); err != nil {
+			log.Warn("Failed to write file", "error", err)
+			return
 		}
 	}
 }
@@ -356,15 +366,29 @@ func (mon *NodeMonitor) provideBadBlocks() {
 func getBadBlocks(node Node) []*badBlockJson {
 	badBlocks := node.BadBlocks()
 	var blockJSON []*badBlockJson
-	// Add bad blocks to report
+
+	var encBlock types.Block
 	for _, block := range badBlocks {
-		blockJSON = append(blockJSON,
-			&badBlockJson{
-				Client: node.Name(),
-				Hash:   block.Hash,
-				RLP:    block.RLP,
-			},
-		)
+		info := &badBlockJson{
+			Clients: []string{node.Name()},
+			Hash:    block.Hash,
+			RLP:     block.RLP,
+		}
+		if err := rlp.DecodeBytes(common.FromHex(block.RLP), &encBlock); err == nil {
+			info.Number = encBlock.Number()
+			pHash := encBlock.ParentHash()
+			info.ParentHash = &pHash
+			time := encBlock.Time()
+			info.Time = &time
+			info.Extra = encBlock.Extra()
+			coinbase := encBlock.Coinbase()
+			info.Coinbase = &coinbase
+			root := encBlock.Root()
+			info.Root = &root
+		} else {
+			log.Warn("Error decoding block", "err", err)
+		}
+		blockJSON = append(blockJSON, info)
 	}
 	return blockJSON
 }

@@ -62,10 +62,11 @@ func (caller *JSONRPCMethodCaller) GetBadBlocks() ([]*eth.BadBlockArgs, error) {
 type RemoteNode struct {
 	RPCMethodCaller // The actual call implementation, json-rpc or http queries
 	// Some local cached values
-	version      string
-	name         string
-	latest       *blockInfo
-	chainHistory map[uint64]*blockInfo
+	version       string
+	name          string
+	latest        *blockInfo
+	badBlockCount int
+	chainHistory  map[uint64]*blockInfo
 	// backend to store hash -> header into
 	db           *blockDB
 	status       int
@@ -327,5 +328,12 @@ func (node *RemoteNode) BadBlocks() []*eth.BadBlockArgs {
 	if err != nil {
 		return []*eth.BadBlockArgs{}
 	}
+	node.badBlockCount = len(args)
 	return args
+}
+
+func (node *RemoteNode) BadBlockCount() int {
+	node.mu.RLock()
+	defer node.mu.RUnlock()
+	return node.badBlockCount
 }
