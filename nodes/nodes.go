@@ -38,6 +38,7 @@ type Node interface {
 	HashAt(num uint64, force bool) common.Hash
 	HeadNum() uint64
 	BadBlocks() []*eth.BadBlockArgs
+	BadBlockCount() int
 }
 
 type clientJson struct {
@@ -130,7 +131,7 @@ func (r *Report) Print() {
 
 func (r *Report) addBadBlocks(badBlocks map[common.Hash]*badBlockJson) {
 	for _, bb := range badBlocks {
-		r.BadBlocks = append(r.BadBlocks, bb) // TODO sort by number
+		r.BadBlocks = append(r.BadBlocks, bb)
 	}
 	sort.Sort(sort.Reverse(r.BadBlocks))
 	// don't show more than 20 bad blocks
@@ -148,7 +149,7 @@ func (r *Report) AddToReport(node Node, vuln []vulnJson) {
 		Name:         node.Name(),
 		Status:       node.Status(),
 		LastProgress: node.LastProgress(),
-		BadBlocks:    0, // TODO add counter len(badBlocks),
+		BadBlocks:    node.BadBlockCount(), // TODO add counter len(badBlocks),
 	}
 	// Add vulnerabilites if applicable
 	if len(vuln) != 0 {

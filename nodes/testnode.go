@@ -144,6 +144,10 @@ func (t *testNode) BadBlocks() []*eth.BadBlockArgs {
 		}}
 }
 
+func (node *testNode) BadBlockCount() int {
+	return len(node.BadBlocks())
+}
+
 func newTestNode(id string, head int, forks []uint64, seeds []int) *testNode {
 	return &testNode{
 		id:             id,
