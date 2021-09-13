@@ -56,7 +56,7 @@ type badBlockJson struct {
 	Hash       common.Hash     `json:"hash"`
 	Number     *big.Int        `json:"number"`
 	ParentHash *common.Hash    `json:"parentHash"`
-	Time       *uint64         `json:"timeStamp"`
+	Time       *uint64         `json:"timestamp"`
 	Extra      []byte          `json:"extraData"`
 	Coinbase   *common.Address `json:"miner"`
 	Root       *common.Hash    `json:"stateRoot"`
