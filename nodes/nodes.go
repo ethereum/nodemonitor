@@ -139,6 +139,7 @@ func (r *Report) addBadBlocks(badBlocks map[common.Hash]*badBlockJson) {
 	if len(r.BadBlocks) > 20 {
 		r.BadBlocks = r.BadBlocks[:20]
 	}
+	reportBadBlocks(r.BadBlocks)
 }
 
 // AddToReport adds the given node to the report
