@@ -146,6 +146,7 @@ func (mon *NodeMonitor) doChecks() {
 	// Update bad blocks
 	mon.checkBadBlocks()
 	r.addBadBlocks(mon.badBlocks)
+	reportBadBlocks(r.BadBlocks, activeNodes)
 
 	if mon.backend == nil {
 		// if there's no backend, this is probably a test.

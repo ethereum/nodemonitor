@@ -32,11 +32,18 @@ func EnableMetrics(conf *Config) {
 
 var reportedBlocks map[uint64]struct{}
 
-func reportBadBlocks(blocks BadBlockList) {
+func reportBadBlocks(nodes []Node, blocks BadBlockList) {
 	for _, block := range blocks {
 		if _, ok := reportedBlocks[block.Number.Uint64()]; !ok {
 			metrics.GetOrRegisterGauge("chain/badblock", registry).Update(block.Number.Int64())
 			reportedBlocks[block.Number.Uint64()] = struct{}{}
+			for _, node := range nodes {
+				h := node.HashAt(block.Number.Uint64(), false)
+				if h == block.Hash {
+					// Node contains a bad block -> consensus issue
+					metrics.GetOrRegisterGauge("chain/consensus", registry).Update(block.Number.Int64())
+				}
+			}
 		}
 	}
 }
