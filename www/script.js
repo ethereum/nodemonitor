@@ -75,7 +75,11 @@ let miniFIFO ={
 let humanFriendly = {
     timestamp: function(val){
         let unix_time = parseInt(val, 16)
-        return this.timeSince(new Date(unix_time*1000)) + " old"
+        let is_future = new Date() - new Date(val) < 0
+        if (is_future)
+            return this.timeSince(new Date(unix_time*1000)) + " ahead"
+        else
+            return this.timeSince(new Date(unix_time*1000)) + " old"
     },
     gasUsed: (val) => parseInt(val, 16),
     gasLimit: (val) => parseInt(val, 16),
@@ -84,7 +88,7 @@ let humanFriendly = {
     hash: utils.etherscanLink,
     parentHash: utils.etherscanLink,
     timeSince: function(date) {
-        let seconds = Math.floor((new Date() - date) / 1000);
+        let seconds = Math.floor((Math.abs(new Date() - date)) / 1000);
         let interval = seconds / 31536000;
         if (interval > 1) {
             return Math.floor(interval) + " years";

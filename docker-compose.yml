@@ -1,0 +1,16 @@
+version: '3.4'
+services:
+    nodemonitor:
+        image: localhost/nodemonitor
+        volumes:
+            - "./config:/config"
+        ports:
+            - 3001:8080
+        command: ['/config/config.toml']
+    geth:
+        image: localhost/client-go:faketime
+        entrypoint: ['sh', '/config/geth.sh']
+        environment:
+            - LD_PRELOAD=/usr/local/lib/faketime/libfaketime.so.1
+        volumes:
+            - "./config:/config"

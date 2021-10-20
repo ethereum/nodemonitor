@@ -1,0 +1,5 @@
+from ethereum/client-go:v1.10.10
+run apk add git make g++
+run git clone https://github.com/wolfcw/libfaketime.git
+workdir /libfaketime/src
+run make install
