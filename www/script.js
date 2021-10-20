@@ -75,7 +75,11 @@ let miniFIFO ={
 let humanFriendly = {
     timestamp: function(val){
         let unix_time = parseInt(val, 16)
-        return this.timeSince(new Date(unix_time*1000)) + " old"
+        let is_future = (new Date()).getTime() < val
+        if (is_future)
+            return this.timeDelta(new Date(unix_time*1000)) + " ahead"
+        else
+            return this.timeDelta(new Date(unix_time*1000)) + " old"
     },
     gasUsed: (val) => parseInt(val, 16),
     gasLimit: (val) => parseInt(val, 16),
@@ -83,8 +87,9 @@ let humanFriendly = {
     difficulty: (val) => parseInt(val, 16),
     hash: utils.etherscanLink,
     parentHash: utils.etherscanLink,
-    timeSince: function(date) {
-        let seconds = Math.floor((new Date() - date) / 1000);
+    timeDelta: function(date) {
+        date = Math.abs(new Date() - date)
+        let seconds = Math.floor(date / 1000);
         let interval = seconds / 31536000;
         if (interval > 1) {
             return Math.floor(interval) + " years";
@@ -167,7 +172,7 @@ function onData(data){
         let badblocks = "0"
         let vulnerabilites = client.Vulnerabilities || []
         if (client.LastProgress > 0){
-            progress = humanFriendly.timeSince(new Date(client.LastProgress*1000)) + " ago"
+            progress = humanFriendly.timeDelta(new Date(client.LastProgress*1000)) + " ago"
         }
         if (client.Status != 0) {
             status = " (unhealthy)"
