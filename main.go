@@ -26,12 +26,10 @@ func main() {
 	}
 	cFile := os.Args[1]
 
-	quitCh := make(chan os.Signal, 1)
-	signal.Notify(quitCh, os.Interrupt)
 	monitorInterruptCh := make(chan struct{})
 	monitorQuitCh := make(chan struct{})
 
-	go configWatcherLoop(cFile, quitCh, monitorQuitCh, monitorInterruptCh)
+	go configWatcherLoop(cFile, monitorQuitCh, monitorInterruptCh)
 
 	if err := runMonitor(cFile, monitorQuitCh, monitorInterruptCh); err == nil {
 		return
@@ -41,7 +39,11 @@ func main() {
 	}
 }
 
-func configWatcherLoop(filePath string, quitCh <-chan os.Signal, monitorQuitCh chan<- struct{}, changedCh chan<- struct{}) {
+// configWatcherLoop looks for changes in the config file, notifying via changedCh when this occurs.
+// if it encounters an error or signal from the os, it notifies the monitor to quit via monitorQuitCh
+func configWatcherLoop(filePath string, monitorQuitCh chan<- struct{}, changedCh chan<- struct{}) {
+	quitCh := make(chan os.Signal, 1)
+	signal.Notify(quitCh, os.Interrupt)
 	lastStat, err := os.Stat(filePath)
 	if err != nil {
 		close(monitorQuitCh)
@@ -67,6 +69,8 @@ func configWatcherLoop(filePath string, quitCh <-chan os.Signal, monitorQuitCh c
 	}
 }
 
+// runMonitor runs the monitor and http-server for the web interface.  it quits if an error is encountered,
+// or is notified via quitCh.  It restarts the monitor and http-server if it reads from restartCh.
 func runMonitor(configFile string, quitCh <-chan struct{}, restartCh <-chan struct{}) error {
 	for {
 		f, err := os.Open(configFile)
