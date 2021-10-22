@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"os"
@@ -24,38 +25,85 @@ func main() {
 		os.Exit(1)
 	}
 	cFile := os.Args[1]
-	f, err := os.Open(cFile)
-	if err != nil {
-		log.Error("Error", "error", err)
-		os.Exit(1)
-	}
-	defer f.Close()
 
-	var config nodes.Config
-	if err := toml.NewDecoder(f).Decode(&config); err != nil {
-		log.Error("Error", "error", err)
-		os.Exit(1)
-	}
-	nodes.EnableMetrics(&config)
-
-	mon, err := spinupMonitor(config)
-	if err != nil {
-		log.Error("Error", "error", err)
-		os.Exit(1)
-	}
-
-	spinupServer(config)
-
-	mon.Start()
-	// Wait for ctrl-c
 	quitCh := make(chan os.Signal, 1)
 	signal.Notify(quitCh, os.Interrupt)
+	monitorInterruptCh := make(chan struct{})
+	monitorQuitCh := make(chan struct{})
 
-	// TODO: Monitor changes to the config file
+	go configWatcherLoop(cFile, quitCh, monitorQuitCh, monitorInterruptCh)
 
-	<-quitCh
-	mon.Stop()
-	os.Exit(0)
+	if err := runMonitor(cFile, monitorQuitCh, monitorInterruptCh); err == nil {
+		return
+	} else {
+		log.Error("Error", "error", err)
+		os.Exit(1)
+	}
+}
+
+func configWatcherLoop(filePath string, quitCh <-chan os.Signal, monitorQuitCh chan<- struct{}, changedCh chan<- struct{}) {
+	lastStat, err := os.Stat(filePath)
+	if err != nil {
+		close(monitorQuitCh)
+	}
+	for {
+		stat, err := os.Stat(filePath)
+		if err != nil {
+			close(monitorQuitCh)
+		}
+
+		if stat.Size() != lastStat.Size() || stat.ModTime() != lastStat.ModTime() {
+			lastStat = stat
+			changedCh <- struct{}{}
+		}
+
+		ticker := time.NewTicker(1 * time.Second)
+		select {
+		case <-quitCh:
+			close(monitorQuitCh)
+		case <-ticker.C:
+			break
+		}
+	}
+}
+
+func runMonitor(configFile string, quitCh <-chan struct{}, restartCh <-chan struct{}) error {
+	for {
+		f, err := os.Open(configFile)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+
+		var config nodes.Config
+		if err := toml.NewDecoder(f).Decode(&config); err != nil {
+			return err
+		}
+		nodes.EnableMetrics(&config)
+		s, err := spinupServer(config)
+		if err != nil {
+			return err
+		}
+
+		mon, err := spinupMonitor(config)
+		if err != nil {
+			return err
+		}
+
+		mon.Start()
+
+		select {
+		case <-quitCh:
+			s.Shutdown(context.Background())
+			mon.Stop()
+			return nil
+		case <-restartCh:
+			log.Info("config file change detected: monitor restarting")
+			s.Shutdown(context.Background())
+			mon.Stop()
+		}
+	}
+	return nil
 }
 
 func spinupMonitor(config nodes.Config) (*nodes.NodeMonitor, error) {
@@ -105,13 +153,24 @@ func spinupMonitor(config nodes.Config) (*nodes.NodeMonitor, error) {
 	return nodes.NewMonitor(clients, db, reload, config.ChainName)
 }
 
-func spinupServer(config nodes.Config) error {
+func spinupServer(config nodes.Config) (*http.Server, error) {
 	if len(config.ServerAddress) == 0 {
-		return nil
+		return nil, errors.New("bad server address")
 	}
+
+	mux := http.NewServeMux()
 	fs := http.FileServer(http.Dir("www/"))
-	http.Handle("/", http.StripPrefix("/", fs))
+	mux.Handle("/", http.StripPrefix("/", fs))
+	s := &http.Server{
+		Addr:           config.ServerAddress,
+		Handler:        mux,
+		ReadTimeout:    10 * time.Second,
+		WriteTimeout:   10 * time.Second,
+		MaxHeaderBytes: 1 << 20,
+	}
+
 	log.Info("Starting web server", "address", config.ServerAddress)
-	go http.ListenAndServe(config.ServerAddress, nil)
-	return nil
+	go s.ListenAndServe()
+
+	return s, nil
 }
