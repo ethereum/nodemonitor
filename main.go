@@ -41,6 +41,7 @@ func main() {
 // if an interrupt is received from the OS or the config file changes,
 // the monitor and server are restarted.
 func monitorLoop(configFile string, quitCh <-chan os.Signal) error {
+	ticker := time.NewTicker(5 * time.Second)
 	for {
 		f, err := os.Open(configFile)
 		if err != nil {
@@ -63,14 +64,12 @@ func monitorLoop(configFile string, quitCh <-chan os.Signal) error {
 		if err != nil {
 			return err
 		}
-
 		mon.Start()
 
 		lastStat, err := os.Stat(configFile)
 		if err != nil {
 			return err
 		}
-
 		// spin waiting until the config file changes (and restarting the monitor)
 		// or a signal is received to exit
 		for {
@@ -86,7 +85,6 @@ func monitorLoop(configFile string, quitCh <-chan os.Signal) error {
 				mon.Stop()
 				break
 			}
-			ticker := time.NewTicker(1 * time.Second)
 
 			select {
 			case <-quitCh:
