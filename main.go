@@ -76,7 +76,6 @@ func monitorLoop(configFile string, quitCh <-chan os.Signal) error {
 		for {
 			stat, err := os.Stat(configFile)
 			if err != nil {
-				/// exit with error here...
 				return err
 			}
 
