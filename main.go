@@ -26,12 +26,10 @@ func main() {
 	}
 	cFile := os.Args[1]
 
-	monitorInterruptCh := make(chan struct{})
-	monitorQuitCh := make(chan struct{})
+	quitCh := make(chan os.Signal, 1)
+	signal.Notify(quitCh, os.Interrupt)
 
-	go configWatcherLoop(cFile, monitorQuitCh, monitorInterruptCh)
-
-	if err := runMonitor(cFile, monitorQuitCh, monitorInterruptCh); err == nil {
+	if err := monitorLoop(cFile, quitCh); err == nil {
 		return
 	} else {
 		log.Error("Error", "error", err)
@@ -39,39 +37,10 @@ func main() {
 	}
 }
 
-// configWatcherLoop looks for changes in the config file, notifying via changedCh when this occurs.
-// if it encounters an error or signal from the os, it notifies the monitor to quit via monitorQuitCh
-func configWatcherLoop(filePath string, monitorQuitCh chan<- struct{}, changedCh chan<- struct{}) {
-	quitCh := make(chan os.Signal, 1)
-	signal.Notify(quitCh, os.Interrupt)
-	lastStat, err := os.Stat(filePath)
-	if err != nil {
-		close(monitorQuitCh)
-	}
-	for {
-		stat, err := os.Stat(filePath)
-		if err != nil {
-			close(monitorQuitCh)
-		}
-
-		if stat.Size() != lastStat.Size() || stat.ModTime() != lastStat.ModTime() {
-			lastStat = stat
-			changedCh <- struct{}{}
-		}
-
-		ticker := time.NewTicker(1 * time.Second)
-		select {
-		case <-quitCh:
-			close(monitorQuitCh)
-		case <-ticker.C:
-			break
-		}
-	}
-}
-
-// runMonitor runs the monitor and http-server for the web interface.  it quits if an error is encountered,
-// or is notified via quitCh.  It restarts the monitor and http-server if it reads from restartCh.
-func runMonitor(configFile string, quitCh <-chan struct{}, restartCh <-chan struct{}) error {
+// monitorLoop handles the life-cycle of a monitor and http-server.
+// if an interrupt is received from the OS or the config file changes,
+// the monitor and server are restarted.
+func monitorLoop(configFile string, quitCh <-chan os.Signal) error {
 	for {
 		f, err := os.Open(configFile)
 		if err != nil {
@@ -88,6 +57,7 @@ func runMonitor(configFile string, quitCh <-chan struct{}, restartCh <-chan stru
 		if err != nil {
 			return err
 		}
+		defer s.Shutdown(context.Background())
 
 		mon, err := spinupMonitor(config)
 		if err != nil {
@@ -96,15 +66,36 @@ func runMonitor(configFile string, quitCh <-chan struct{}, restartCh <-chan stru
 
 		mon.Start()
 
-		select {
-		case <-quitCh:
-			s.Shutdown(context.Background())
-			mon.Stop()
-			return nil
-		case <-restartCh:
-			log.Info("config file change detected: monitor restarting")
-			s.Shutdown(context.Background())
-			mon.Stop()
+		lastStat, err := os.Stat(configFile)
+		if err != nil {
+			return err
+		}
+
+		// spin waiting until the config file changes (and restarting the monitor)
+		// or a signal is received to exit
+		for {
+			stat, err := os.Stat(configFile)
+			if err != nil {
+				/// exit with error here...
+				return err
+			}
+
+			if stat.Size() != lastStat.Size() || stat.ModTime() != lastStat.ModTime() {
+				lastStat = stat
+				log.Info("config file change detected: monitor restarting")
+				s.Shutdown(context.Background())
+				mon.Stop()
+				break
+			}
+			ticker := time.NewTicker(1 * time.Second)
+
+			select {
+			case <-quitCh:
+				mon.Stop()
+				return nil
+			case <-ticker.C:
+				break
+			}
 		}
 	}
 	return nil
