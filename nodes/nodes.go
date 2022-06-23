@@ -70,7 +70,15 @@ func (b BadBlockList) Len() int {
 }
 
 func (b BadBlockList) Less(i, j int) bool {
-	return b[i].Number.Cmp(b[j].Number) < 0
+	x := b[i].Number
+	if x == nil {
+		x = new(big.Int)
+	}
+	y := b[j].Number
+	if y == nil {
+		y = new(big.Int)
+	}
+	return x.Cmp(y) < 0
 }
 
 func (b BadBlockList) Swap(i, j int) {
