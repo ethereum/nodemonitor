@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	NodeStatusOK          = 0
-	NodeStatusUnreachable = 1
+	NodeStatusOK = iota
+	NodeStatusUnreachable
 )
 
 type blockInfo struct {
