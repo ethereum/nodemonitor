@@ -81,7 +81,7 @@ func spinupMonitor(config nodes.Config) (*nodes.NodeMonitor, error) {
 			node, err = nodes.NewAlchemyNode(c.Name, config.AlchemyKey, config.AlchemyEndpoint,
 				db, c.Ratelimit)
 		case "rpc":
-			node, err = nodes.NewRPCNode(c.Name, c.Url, db, c.Ratelimit)
+			node, err = nodes.NewRPCNode(c.Name, c.Url, c.AuthHeaders, db, c.Ratelimit)
 		case "etherscan":
 			node, err = nodes.NewEtherscanNode(c.Name, config.EtherscanKey, config.EtherscanEndpoint,
 				db, c.Ratelimit)
@@ -101,7 +101,6 @@ func spinupMonitor(config nodes.Config) (*nodes.NodeMonitor, error) {
 		clients = append(clients, node)
 		log.Info("Client configured", "name", c.Name)
 	}
-
 	return nodes.NewMonitor(clients, db, reload, config.ChainName)
 }
 

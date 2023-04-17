@@ -28,6 +28,16 @@ chain_name="EphemeralNet"
 [[clients]]
   kind="testnode-fork-recent"
 
+# Example on how to set access headers:
+#
+# [[clients]]
+#   kind="rpc"
+#   name="Goerli-1"
+#   url="https://goerli.myethereumnode.io"
+#   auth_headers=["Access-Auth-Id: 192830110.access", "Access-Secret: 112391201092381209381209812093"]
+
+
+
   [Metrics]
 
 enabled = false

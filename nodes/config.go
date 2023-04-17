@@ -27,8 +27,9 @@ type metricsConfig struct {
 }
 
 type ClientInfo struct {
-	Url       string
-	Name      string
-	Kind      string
-	Ratelimit int
+	Url         string
+	Name        string
+	Kind        string
+	Ratelimit   int
+	AuthHeaders []string
 }
