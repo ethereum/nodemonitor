@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -79,8 +81,17 @@ type RemoteNode struct {
 	lastCheck map[string]time.Time
 }
 
-func NewRPCNode(name string, url string, db *blockDB, rateLimit int) (*RemoteNode, error) {
-	rpcCli, err := rpc.Dial(url)
+func NewRPCNode(name string, url string, authHeaders []string, db *blockDB, rateLimit int) (*RemoteNode, error) {
+	var headers = make(http.Header)
+	for _, hdr := range authHeaders {
+		// Try to coerce strings ->  map[string][]string
+		if kv := strings.Split(hdr, ": "); len(kv) != 2 {
+			return nil, fmt.Errorf("Expected colon-separated key-value pair, got %s", hdr)
+		} else {
+			headers[kv[0]] = kv[1:]
+		}
+	}
+	rpcCli, err := rpc.DialOptions(context.Background(), url, rpc.WithHeaders(headers))
 	if err != nil {
 		return nil, err
 	}

@@ -1,5 +1,5 @@
 # Build in a stock Go builder container
-FROM golang:1.18-alpine as builder
+FROM golang:1.20-alpine as builder
 
 RUN apk add --no-cache gcc musl-dev linux-headers
 
@@ -8,7 +8,7 @@ ADD *.go /nodemonitor
 ADD go.mod /nodemonitor
 ADD go.sum /nodemonitor
 ADD nodes /nodemonitor/nodes
-RUN cd /nodemonitor && go build .
+RUN cd /nodemonitor && go build -ldflags "-X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=warn" .
 
 # Pull binary into a second stage deploy alpine container
 FROM alpine:latest
