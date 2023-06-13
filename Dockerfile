@@ -15,7 +15,7 @@ FROM alpine:latest
 COPY --from=builder /nodemonitor/nodemonitor /usr/local/bin/
 
 ADD www/index.html /www/index.html
-ADD www/script.js /www/script.js
+ADD www/*.js /www/
 RUN mkdir -p /www/hashes
 RUN mkdir -p /www/vulns
 RUN mkdir -p /www/badblocks
