@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"os"
@@ -24,38 +25,77 @@ func main() {
 		os.Exit(1)
 	}
 	cFile := os.Args[1]
-	f, err := os.Open(cFile)
-	if err != nil {
-		log.Error("Error", "error", err)
-		os.Exit(1)
-	}
-	defer f.Close()
 
-	var config nodes.Config
-	if err := toml.NewDecoder(f).Decode(&config); err != nil {
-		log.Error("Error", "error", err)
-		os.Exit(1)
-	}
-	nodes.EnableMetrics(&config)
-
-	mon, err := spinupMonitor(config)
-	if err != nil {
-		log.Error("Error", "error", err)
-		os.Exit(1)
-	}
-
-	spinupServer(config)
-
-	mon.Start()
-	// Wait for ctrl-c
 	quitCh := make(chan os.Signal, 1)
 	signal.Notify(quitCh, os.Interrupt)
 
-	// TODO: Monitor changes to the config file
+	if err := monitorLoop(cFile, quitCh); err == nil {
+		return
+	} else {
+		log.Error("Error", "error", err)
+		os.Exit(1)
+	}
+}
 
-	<-quitCh
-	mon.Stop()
-	os.Exit(0)
+// monitorLoop handles the life-cycle of a monitor and http-server.
+// if an interrupt is received from the OS or the config file changes,
+// the monitor and server are restarted.
+func monitorLoop(configFile string, quitCh <-chan os.Signal) error {
+	ticker := time.NewTicker(5 * time.Second)
+	for {
+		f, err := os.Open(configFile)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+
+		var config nodes.Config
+		if err := toml.NewDecoder(f).Decode(&config); err != nil {
+			return err
+		}
+		nodes.EnableMetrics(&config)
+		s, err := spinupServer(config)
+		if err != nil {
+			return err
+		}
+		defer s.Shutdown(context.Background())
+
+		mon, err := spinupMonitor(config)
+		if err != nil {
+			return err
+		}
+		mon.Start()
+
+		lastStat, err := os.Stat(configFile)
+		if err != nil {
+			return err
+		}
+		// spin waiting until the config file changes (and restarting the monitor)
+		// or a signal is received to exit
+		for {
+			stat, err := os.Stat(configFile)
+			if err != nil {
+				return err
+			}
+
+			if stat.Size() != lastStat.Size() || stat.ModTime() != lastStat.ModTime() {
+				lastStat = stat
+				log.Info("config file change detected: monitor restarting")
+				s.Shutdown(context.Background())
+				mon.Stop()
+				break
+			}
+
+			select {
+			case <-quitCh:
+				mon.Stop()
+				return nil
+			case <-ticker.C:
+				break
+			}
+		}
+	}
+	return nil
 }
 
 func spinupMonitor(config nodes.Config) (*nodes.NodeMonitor, error) {
@@ -104,13 +144,24 @@ func spinupMonitor(config nodes.Config) (*nodes.NodeMonitor, error) {
 	return nodes.NewMonitor(clients, db, reload, config.ChainName)
 }
 
-func spinupServer(config nodes.Config) error {
+func spinupServer(config nodes.Config) (*http.Server, error) {
 	if len(config.ServerAddress) == 0 {
-		return nil
+		return nil, errors.New("bad server address")
 	}
+
+	mux := http.NewServeMux()
 	fs := http.FileServer(http.Dir("www/"))
-	http.Handle("/", http.StripPrefix("/", fs))
+	mux.Handle("/", http.StripPrefix("/", fs))
+	s := &http.Server{
+		Addr:           config.ServerAddress,
+		Handler:        mux,
+		ReadTimeout:    10 * time.Second,
+		WriteTimeout:   10 * time.Second,
+		MaxHeaderBytes: 1 << 20,
+	}
+
 	log.Info("Starting web server", "address", config.ServerAddress)
-	go http.ListenAndServe(config.ServerAddress, nil)
-	return nil
+	go s.ListenAndServe()
+
+	return s, nil
 }

@@ -77,6 +77,7 @@ func (mon *NodeMonitor) Start() {
 func (mon *NodeMonitor) Stop() {
 	close(mon.quitCh)
 	mon.wg.Wait()
+	mon.backend.db.Close()
 }
 
 func (mon *NodeMonitor) loop() {
@@ -174,7 +175,7 @@ func (mon *NodeMonitor) checkBadBlocks() {
 	mon.lastBadBlocks = time.Now()
 	for _, node := range mon.nodes {
 		blocks := getBadBlocks(node)
-		for i, _ := range blocks {
+		for i := range blocks {
 			hash := blocks[i].Hash
 			info := mon.badBlocks[hash]
 			if info == nil {
