@@ -3,3 +3,4 @@ blockDB
 config.toml
 www/hashes
 www/data.json
+vendor/
